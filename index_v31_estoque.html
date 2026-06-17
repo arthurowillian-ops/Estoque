@@ -1,0 +1,2791 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sistema de Conferência</title>
+
+    <!-- Ícone para iPhone (tela inicial e favoritos) -->
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/T15Gt4Yk/Minimalist-Business-Card-(4).png">
+    <link rel="apple-touch-icon" sizes="180x180" href="https://i.postimg.cc/T15Gt4Yk/Minimalist-Business-Card-(4).png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SGC">
+
+    <!-- Favicon para aba do browser (logo da empresa) -->
+    <link rel="icon" type="image/png" href="https://i.postimg.cc/sfJg4Ykr/br3-imagem.png">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #00B7CC; --dark: #1a1c1e; --bg: #f4f7f6; --white: #ffffff; --green: #92D050; --blue: #9BC2E6; }
+        * { box-sizing: border-box; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: var(--bg); color: #333; overflow-x: hidden; }
+        
+        .screen { display: none; min-height: 100vh; padding: 15px; flex-direction: column; align-items: center; }
+        .screen.active { display: flex; animation: fadeIn 0.3s ease; }
+
+        /* ===== SPLASH / TELA INICIAL ===== */
+        #scr-splash {
+            padding: 0; justify-content: center; align-items: center;
+            background: radial-gradient(circle at 50% 38%, #ffffff 0%, #f6f9f9 55%, #eef3f3 100%);
+        }
+        #scr-splash.fade-out { animation: splashOut .6s ease forwards; }
+        .splash-wrap { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 20px; }
+        .splash-logo {
+            height: 130px; width: auto; object-fit: contain;
+            filter: drop-shadow(0 10px 30px rgba(0,0,0,.08));
+            opacity: 0; transform: scale(.78);
+            animation: splashLogo 1s cubic-bezier(.2,.8,.2,1) .15s forwards;
+        }
+        .splash-sub {
+            margin: 24px 0 0; font-size: 13.5px; color: #8a949c; letter-spacing: .3px;
+            opacity: 0; transform: translateY(14px);
+            animation: splashRise .7s ease .7s forwards;
+        }
+        .splash-divider {
+            margin-top: 20px; height: 3px; width: 0; border-radius: 3px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            animation: splashLine .9s ease .9s forwards;
+        }
+        @keyframes splashLogo {
+            0%   { opacity: 0; transform: scale(.78); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes splashRise {
+            0%   { opacity: 0; transform: translateY(14px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes splashLine {
+            0%   { width: 0; opacity: 0; }
+            100% { width: 180px; opacity: 1; }
+        }
+        @keyframes splashOut {
+            0%   { opacity: 1; }
+            100% { opacity: 0; visibility: hidden; }
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        #sync-status {
+            position: sticky; top: 0; z-index: 1001; width: 100%;
+            text-align: center; padding: 8px; font-weight: 700; font-size: 12px;
+            transition: 0.3s; margin-bottom: 10px; border-radius: 8px;
+        }
+        .status-sync { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status-saving { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+
+        .card-auth { background: var(--white); padding: 30px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; width: 100%; max-width: 400px; margin-top: 15vh; border: 1px solid #eee; }
+        .logo-login { height: 80px; margin-bottom: 20px; }
+        
+        .grid-selection { display: grid; grid-template-columns: 1fr; gap: 15px; width: 100%; max-width: 700px; margin-top: 20px; }
+        @media (min-width: 600px) { .grid-selection { grid-template-columns: 1fr 1fr; } }
+
+        .card-type { background: var(--white); padding: 30px 20px; border-radius: 20px; text-align: center; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 2px solid transparent; }
+        .card-type:active { transform: scale(0.98); background: #fafafa; }
+        /* Grid da tela de módulos do sistema (2x2) */
+        .modules-grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+        @media (min-width: 700px) { .modules-grid { grid-template-columns: 1fr 1fr; } }
+        .module-soon { position: relative; }
+        .module-soon::after {
+            content: 'EM BREVE'; position: absolute; top: 12px; right: 12px;
+            font-size: 9px; font-weight: 800; letter-spacing: .5px;
+            background: #eef2f4; color: #9aa3aa; padding: 3px 9px; border-radius: 20px;
+        }
+        .module-soon { opacity: .82; }
+        .module-soon:hover { opacity: 1; }
+
+        .container { width: 100%; max-width: 1100px; }
+        .header-app { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 15px; background: var(--white); padding: 12px 20px; border-radius: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
+        
+        .table-card { background: white; border-radius: 16px; overflow-x: auto; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th { background: #f8f9fa; padding: 12px; text-align: left; font-size: 11px; color: #888; text-transform: uppercase; }
+        td { padding: 10px 12px; border-bottom: 1px solid #f1f1f1; font-size: 13px; }
+
+        .status-cell { font-size: 11px; color: #666; line-height: 1.2; }
+        .pct-badge { background: #e0f7fa; color: #00838f; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-right: 5px; }
+
+        /* Estilo da Bolinha de Status */
+        .status-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .dot-red { background-color: #ff4d4d; }
+        .dot-yellow { background-color: #ffcc00; }
+        .dot-green { background-color: #28a745; }
+
+        .check-container { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+        .check-row { 
+            display: grid; grid-template-columns: 1fr 120px 50px; 
+            background: white; border-radius: 12px; overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #efefef;
+        }
+        .c-posto { grid-column: 1 / span 3; padding: 8px 15px; font-weight: 700; font-size: 10px; background: #fafafa; border-left: 8px solid var(--green); text-transform: uppercase; }
+        .lp-style { border-left-color: var(--blue); background: #f4faff; }
+        .c-ativid { padding: 12px 15px; font-size: 13px; font-weight: 500; display: flex; align-items: center; }
+        
+        .action-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; background: white; 
+            padding: 15px; box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
+            z-index: 1000; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 10px;
+        }
+
+        @media (min-width: 1024px) {
+            .check-row { grid-template-columns: 260px 1fr 180px 80px; }
+            .c-posto { grid-column: auto; padding: 20px; }
+            .action-bar { display: grid; grid-template-columns: 1fr 420px; padding: 25px 40px; }
+        }
+
+        button { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 10px; font-weight: 700; cursor: pointer; }
+        input[type="checkbox"] { width: 32px; height: 32px; accent-color: var(--primary); }
+        input[type="date"] { padding: 8px; border: 1px solid #ddd; border-radius: 8px; width: 100%; }
+        textarea { width: 100%; height: 70px; border-radius: 10px; border: 1px solid #ddd; padding: 10px; resize: none; }
+
+        /* MODAL DE PESQUISA */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55); z-index: 2000;
+            align-items: flex-start; justify-content: center;
+            padding: 20px; overflow-y: auto;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            background: #fff; border-radius: 20px; width: 100%; max-width: 720px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25); overflow: hidden;
+            margin: auto;
+        }
+        .modal-header {
+            background: var(--dark); color: #fff;
+            padding: 18px 20px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { margin: 0; font-size: 15px; }
+        .modal-close {
+            background: none; color: #fff; border: none;
+            font-size: 22px; cursor: pointer; line-height: 1; padding: 4px 8px;
+        }
+        .modal-body { padding: 20px; }
+        .search-input-wrap { position: relative; margin-bottom: 6px; }
+        .search-input-wrap input {
+            width: 100%; padding: 12px 16px 12px 42px;
+            border: 2px solid #ddd; border-radius: 12px;
+            font-size: 14px; outline: none; transition: border 0.2s;
+        }
+        .search-input-wrap input:focus { border-color: var(--primary); }
+        .search-input-wrap .ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 17px; }
+        .search-hint { font-size: 11px; color: #aaa; margin-bottom: 16px; }
+        .search-suggestions {
+            background: #fff; border: 1px solid #eee; border-radius: 10px;
+            max-height: 200px; overflow-y: auto; margin-bottom: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        }
+        .suggestion-item {
+            padding: 10px 14px; cursor: pointer; font-size: 13px;
+            border-bottom: 1px solid #f5f5f5; transition: background 0.15s;
+        }
+        .suggestion-item:last-child { border-bottom: none; }
+        .suggestion-item:hover { background: #f0fbfc; }
+        .suggestion-item mark { background: #c8f0f5; border-radius: 3px; padding: 0 2px; }
+        .search-results-title {
+            font-size: 12px; font-weight: 700; color: #555;
+            text-transform: uppercase; margin: 16px 0 10px; letter-spacing: 0.5px;
+        }
+        .search-results-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+        .search-result-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 14px; border-radius: 12px;
+            border: 1px solid #eee; font-size: 13px;
+            transition: background 0.15s; cursor: default;
+        }
+        .search-result-item:hover { background: #fafafa; }
+        .result-dot {
+            width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+        }
+        .result-dot.green { background: #28a745; box-shadow: 0 0 0 3px rgba(40,167,69,0.18); }
+        .result-dot.red   { background: #ff4d4d; box-shadow: 0 0 0 3px rgba(255,77,77,0.18); }
+        .result-info { flex: 1; }
+        .result-express { font-weight: 700; color: #222; }
+        .result-op { font-size: 11px; color: #888; }
+        .result-type-badge {
+            font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+            text-transform: uppercase;
+        }
+        .badge-modulo { background: #e8f5e9; color: #2e7d32; }
+        .badge-pod    { background: #e3f2fd; color: #1565c0; }
+        .search-empty { text-align: center; color: #aaa; padding: 30px 0; font-size: 14px; }
+        .search-loading { text-align: center; color: #aaa; padding: 20px 0; font-size: 13px; }
+        .search-stats {
+            font-size: 12px; color: #888; margin-bottom: 10px;
+            display: flex; gap: 16px; align-items: center;
+        }
+        .stat-green { color: #28a745; font-weight: 700; }
+        .stat-red   { color: #ff4d4d; font-weight: 700; }
+
+        /* TABS DO MODAL DE PRODUTO */
+        .prod-tab {
+            background: none; color: #666; border: none; padding: 14px 20px;
+            font-size: 13px; font-weight: 700; cursor: pointer; border-bottom: 3px solid transparent;
+            transition: 0.2s; border-radius: 0;
+        }
+        .prod-tab.active { color: var(--dark); border-bottom-color: var(--primary); }
+        .prod-tab-content { display: none; }
+        .prod-tab-content.show { display: block !important; }
+
+        /* TABELA ESTILO PLANILHA */
+        .sheet-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .sheet-table th {
+            background: var(--dark); color: #fff; padding: 8px 10px;
+            text-align: left; font-size: 11px; text-transform: uppercase; font-weight: 700;
+        }
+        .sheet-table td { padding: 4px 6px; border: 1px solid #e8e8e8; vertical-align: middle; }
+        .sheet-table tr:nth-child(even) td { background: #fafafa; }
+        .sheet-table input[type="text"] {
+            width: 100%; padding: 6px 8px; border: none; background: transparent;
+            font-size: 13px; outline: none; font-family: 'Inter', sans-serif;
+        }
+        .sheet-table input[type="text"]:focus { background: #fffbe6; }
+        .sheet-table input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--primary); display: block; margin: 0 auto; }
+        .sheet-table .col-del { width: 36px; text-align: center; }
+        .sheet-table .btn-del { background: #ff4d4d; color: white; border: none; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
+
+        /* SUB-TABS EAP/SEQ */
+        .eap-sub-tab, .seq-sub-tab { border-radius: 8px !important; }
+        .sheet-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid #e8e8e8; max-height: 320px; overflow-y: auto; }
+
+        /* ===== BOTÃO DE AJUDA (login) ===== */
+        .help-fab {
+            position: absolute; top: 18px; right: 18px; z-index: 30;
+            width: 52px; height: 52px; border-radius: 16px;
+            background: #fff; color: #2563eb; border: none;
+            font-size: 22px; font-weight: 800; cursor: pointer;
+            box-shadow: 0 6px 18px rgba(20,30,40,.12);
+            display: flex; align-items: center; justify-content: center;
+            transition: transform .15s, box-shadow .15s;
+        }
+        .help-fab:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(20,30,40,.18); }
+        .help-fab:active { transform: scale(.95); }
+        /* Botão de ajuda inline (header de produtos) */
+        .help-fab-inline {
+            width: 42px; height: 42px; border-radius: 12px; padding: 0;
+            background: #fff; color: var(--primary); border: 2px solid #e6eef0;
+            font-size: 18px; font-weight: 800; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: 0.2s;
+        }
+        .help-fab-inline:hover { border-color: var(--primary); background: #f0fbfc; }
+        .help-fab-inline:active { transform: scale(.95); }
+
+        /* ===== CONTEÚDO DO MODAL DE AJUDA ===== */
+        .help-box { max-width: 820px; }
+        .help-header {
+            position: relative;
+            background: linear-gradient(135deg, #0f1722, #1c3b46);
+            color: #fff; padding: 26px 24px;
+        }
+        .help-header h2 { margin: 0 0 4px; font-size: 19px; }
+        .help-header p { margin: 0; font-size: 12.5px; color: #b9c6cc; }
+        .help-header .help-tag {
+            display: inline-block; margin-top: 12px; background: var(--primary);
+            color: #fff; font-size: 10px; letter-spacing: .6px; padding: 4px 12px; border-radius: 20px;
+        }
+        .help-body { padding: 0; max-height: 74vh; overflow-y: auto; }
+        .help-toc {
+            display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 24px;
+            background: #f5f9fa; border-bottom: 1px solid #e6eef0;
+        }
+        .help-toc a {
+            font-size: 11.5px; color: #16766c; text-decoration: none; font-weight: 600; cursor: pointer;
+            background: #fff; border: 1px solid #d8e6e7; border-radius: 20px; padding: 5px 12px;
+        }
+        .help-toc a:hover { background: #e8f7f9; }
+        .help-section { padding: 20px 24px; border-bottom: 1px solid #f0f3f4; }
+        .help-section:last-child { border-bottom: none; }
+        .help-section h3 {
+            margin: 0 0 10px; font-size: 15px; color: #0f1722;
+            display: flex; align-items: center; gap: 9px;
+        }
+        .help-section h3 .num {
+            flex: 0 0 26px; width: 26px; height: 26px; border-radius: 8px;
+            background: var(--primary); color: #fff; font-size: 12px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .help-section h4 { margin: 14px 0 6px; font-size: 12.5px; color: #16766c; }
+        .help-section p { margin: 7px 0; font-size: 12.5px; color: #3a444c; line-height: 1.55; }
+        .help-section ul, .help-section ol { margin: 6px 0 10px; padding-left: 20px; }
+        .help-section li { margin: 5px 0; font-size: 12.5px; color: #3a444c; line-height: 1.5; }
+        .help-kbd {
+            background: #eef2f4; border-radius: 4px; padding: 1px 6px;
+            font-family: 'Courier New', monospace; font-size: 11px; color: #0b4f48;
+        }
+        .help-steps { counter-reset: hs; list-style: none; padding-left: 0; }
+        .help-steps li {
+            position: relative; padding-left: 34px; margin: 8px 0;
+        }
+        .help-steps li::before {
+            counter-increment: hs; content: counter(hs);
+            position: absolute; left: 0; top: 0;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: var(--primary); color: #fff; font-size: 11px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .help-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 11.5px; }
+        .help-table th { background: #0f1722; color: #fff; text-align: left; padding: 7px 9px; }
+        .help-table td { border: 1px solid #e6edee; padding: 6px 9px; vertical-align: top; }
+        .help-table tr:nth-child(even) td { background: #f7fafb; }
+        .help-note {
+            border-left: 4px solid var(--primary); background: #f3fafb;
+            border-radius: 6px; padding: 9px 13px; margin: 11px 0; font-size: 12px; color: #2b545d;
+        }
+        .help-note.warn { border-left-color: #e0a106; background: #fffaf0; color: #8a6a14; }
+        .help-note.danger { border-left-color: #d9534f; background: #fdf3f3; color: #93403d; }
+        .help-note b { color: inherit; }
+
+        /* ===== MÓDULO: ESTOQUE SIMULADO ===== */
+        #scr-estoque { padding: 0; align-items: stretch; }
+        .est-stk-top {
+            position: sticky; top: 0; z-index: 50; background: var(--dark); color: #fff;
+            display: flex; align-items: center; gap: 12px; padding: 14px 18px; flex-wrap: wrap;
+        }
+        .est-stk-top h3 { margin: 0; font-size: 15px; flex: 1; min-width: 160px; }
+        .est-stk-body { padding: 16px; max-width: 1300px; width: 100%; margin: 0 auto; }
+        .stk-import-bar {
+            display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+            background: #fff; border: 1px solid #e6eef0; border-radius: 14px; padding: 14px 18px; margin-bottom: 16px;
+            box-shadow: 0 2px 10px rgba(0,0,0,.04);
+        }
+        .stk-import-btn {
+            display: inline-flex; align-items: center; gap: 8px; background: #217346; color: #fff;
+            padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; border: none;
+        }
+        .stk-import-btn:active { transform: scale(.97); }
+        .stk-meta { display: flex; gap: 22px; flex-wrap: wrap; font-size: 12px; color: #5b6670; }
+        .stk-meta b { display: block; font-size: 14px; color: var(--dark); font-weight: 700; }
+        .stk-meta .empty { color: #b08900; }
+        .stk-search-wrap { position: relative; margin-bottom: 14px; }
+        .stk-search-wrap input {
+            width: 100%; padding: 14px 16px 14px 44px; border: 2px solid #ddd; border-radius: 12px; font-size: 15px; outline: none;
+        }
+        .stk-search-wrap input:focus { border-color: var(--primary); }
+        .stk-search-wrap svg { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); }
+        .stk-result-card { background: #fff; border: 1px solid #e6eef0; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+        .stk-result-card .rc-code { font-size: 13px; color: var(--primary); font-weight: 800; }
+        .stk-result-card .rc-desc { font-size: 15px; color: var(--dark); font-weight: 700; margin: 2px 0 12px; }
+        .stk-wh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .stk-wh { background: #f4f7f6; border-radius: 10px; padding: 11px 13px; }
+        .stk-wh .wh-name { font-size: 11px; color: #7a848c; }
+        .stk-wh .wh-val { font-size: 18px; font-weight: 800; color: var(--dark); }
+        .stk-wh.total { background: var(--primary); }
+        .stk-wh.total .wh-name, .stk-wh.total .wh-val { color: #fff; }
+        .stk-table-wrap { border: 1px solid #e6eef0; border-radius: 12px; overflow: auto; max-height: 60vh; background: #fff; }
+        table.stk-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 640px; }
+        table.stk-table th {
+            position: sticky; top: 0; background: var(--dark); color: #fff; padding: 11px 12px; text-align: left; z-index: 2; font-size: 11.5px;
+        }
+        table.stk-table td { border-bottom: 1px solid #f0f3f4; padding: 9px 12px; }
+        table.stk-table tr:nth-child(even) td { background: #fafbfc; }
+        table.stk-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .stk-wh-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 20px; }
+        .wh1 { background: #e3f0ff; color: #2364c7; }
+        .wh2 { background: #e8f7ee; color: #1a9b54; }
+        .wh3 { background: #fdf0e3; color: #c77a23; }
+        .stk-empty { text-align: center; color: #aaa; padding: 50px 20px; font-size: 14px; }
+        .stk-count-line { font-size: 12px; color: #7a848c; margin: 8px 2px 12px; }
+
+        /* ===== ESTRUTURA DO PRODUTO (tela cheia) ===== */
+        #scr-estrutura { padding: 0; align-items: stretch; }
+        .est-topbar {
+            position: sticky; top: 0; z-index: 50; background: var(--dark); color: #fff;
+            display: flex; align-items: center; gap: 12px; padding: 14px 18px; flex-wrap: wrap;
+        }
+        .est-topbar h3 { margin: 0; font-size: 15px; flex: 1; min-width: 160px; }
+        .est-topbar .pill { font-size: 11px; background: rgba(255,255,255,.15); padding: 4px 10px; border-radius: 20px; }
+        .est-body { padding: 16px; max-width: 1400px; width: 100%; margin: 0 auto; }
+        .est-proj-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+        .est-proj-search { position: relative; flex: 1; min-width: 220px; }
+        .est-proj-search input { width: 100%; padding: 11px 14px; border: 2px solid #ddd; border-radius: 10px; font-size: 14px; outline: none; }
+        .est-proj-search input:focus { border-color: var(--primary); }
+        .est-proj-dd {
+            position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ddd;
+            border-radius: 0 0 10px 10px; max-height: 260px; overflow-y: auto; z-index: 60; display: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,.12);
+        }
+        .est-proj-dd div { padding: 10px 14px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #f3f3f3; }
+        .est-proj-dd div:hover { background: #f0fbfc; }
+        .est-proj-dd .badge-modulo, .est-proj-dd .badge-pod { font-size: 10px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; }
+        .badge-modulo { background: #e3f0ff; color: #2364c7; }
+        .badge-pod { background: #fff0e3; color: #c77a23; }
+        .est-grid-wrap { border: 1px solid #e2e2e2; border-radius: 10px; overflow: auto; max-height: 60vh; }
+        table.est-grid { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 880px; }
+        table.est-grid th { position: sticky; top: 0; background: var(--dark); color: #fff; padding: 9px 8px; font-size: 11px; text-align: left; z-index: 2; }
+        table.est-grid td { border: 1px solid #ececec; padding: 0; }
+        table.est-grid tr:nth-child(even) td { background: #fafafa; }
+        table.est-grid input { width: 100%; border: none; background: transparent; padding: 7px 8px; font-size: 12px; outline: none; }
+        table.est-grid input:focus { background: #fffbe6; box-shadow: inset 0 0 0 2px var(--primary); }
+        table.est-grid .num { text-align: right; }
+        table.est-grid .rownum { background: #f0f0f0; color: #999; text-align: center; font-size: 10px; width: 34px; user-select: none; }
+        table.est-grid .orphan input { background: #fff2f2; }
+        table.est-grid .colx { width: 34px; text-align: center; }
+        .est-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+        .est-actions button { padding: 9px 14px; font-size: 12px; border-radius: 8px; }
+        .est-warn { background: #fff3cd; border: 1px solid #ffe69c; color: #7a5b00; padding: 8px 12px; border-radius: 8px; font-size: 12px; margin-bottom: 10px; display: none; }
+        .est-empty { text-align: center; color: #aaa; padding: 40px 20px; font-size: 13px; }
+
+        /* ===== GALERIA DE UNIDADES (cards estilo rede) ===== */
+        .est-gallery-stats { font-size: 12px; color: #777; margin-bottom: 14px; font-weight: 600; }
+        .recard-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 18px;
+        }
+        .recard {
+            position: relative; background: #fff; border-radius: 18px;
+            border: 1px solid #eef0f2; box-shadow: 0 4px 14px rgba(20,30,40,.05);
+            padding: 26px 16px 18px; text-align: center; cursor: pointer;
+            transition: transform .15s, box-shadow .15s, border-color .15s;
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+        }
+        .recard:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(20,30,40,.12); border-color: var(--primary); }
+        .recard-img { height: 64px; width: auto; object-fit: contain; margin-bottom: 6px; opacity: .92; }
+        .recard-cod { font-weight: 800; font-size: 15px; color: var(--dark); }
+        .recard-sub { font-size: 11px; color: #8a93a0; line-height: 1.5; }
+        .recard-type { font-size: 9px; padding: 1px 7px; border-radius: 10px; margin-left: 4px; vertical-align: middle; }
+        .recard-check {
+            position: absolute; top: 12px; right: 12px;
+            width: 26px; height: 26px; border-radius: 50%;
+            background: #22c55e; color: #fff; font-size: 14px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 6px rgba(34,197,94,.45);
+        }
+        /* ===== QUANTITATIVO ===== */
+        .quant-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+        .quant-stat { background: #f4f7f6; border-radius: 12px; padding: 14px; text-align: center; }
+        .quant-stat b { display: block; font-size: 22px; color: var(--dark); }
+        .quant-stat span { font-size: 11px; color: #777; }
+        .quant-result-item { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-bottom: 1px solid #f0f0f0; }
+        .quant-result-item .qinfo { flex: 1; }
+        .quant-result-item .qexp { font-weight: 700; font-size: 13px; }
+        .quant-result-item .qsub { font-size: 11px; color: #888; }
+        .quant-qty { font-weight: 700; font-size: 14px; color: #c0392b; white-space: nowrap; }
+        .quant-qty.zero { color: #27ae60; }
+        .mat-line { font-size: 11px; color: #555; background: #f7f7f7; border-radius: 6px; padding: 4px 7px; margin-top: 4px; }
+        .mat-line .pend { color: #c0392b; font-weight: 700; }
+        .mat-line .ok { color: #27ae60; font-weight: 700; }
+    </style>
+</head>
+<body>
+
+    <!-- TELA INICIAL / SPLASH -->
+    <div id="scr-splash" class="screen active">
+        <div class="splash-wrap">
+            <img src="https://i.postimg.cc/sfJg4Ykr/br3-imagem.png" class="splash-logo" alt="Brasil ao Cubo">
+            <p class="splash-sub">Sistema de Conferência</p>
+            <div class="splash-divider"></div>
+        </div>
+    </div>
+
+    <!-- TELA DE MÓDULOS DO SISTEMA -->
+    <div id="scr-modules" class="screen">
+        <div style="width:100%; max-width:1100px;">
+            <!-- Header -->
+            <div style="background:#fff; border-radius:16px; padding:16px 24px; display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+                <img src="https://i.postimg.cc/sfJg4Ykr/br3-imagem.png" style="height:36px;">
+                <button class="help-fab-inline" onclick="openHelpModal()" title="Ajuda — Como funciona o sistema" aria-label="Ajuda">?</button>
+            </div>
+
+            <!-- Título -->
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:24px;">
+                <div style="width:4px; height:28px; background:var(--dark); border-radius:2px;"></div>
+                <h2 style="margin:0; font-size:22px; color:var(--dark);">Módulos do Sistema</h2>
+            </div>
+
+            <!-- Grid de módulos -->
+            <div class="modules-grid">
+                <div class="card-type" onclick="show('scr-products')">
+                    <img src="https://i.postimg.cc/7hkSXm1F/conferencia.png" style="height:74px; width:auto; object-fit:contain; display:block; margin:0 auto 14px;" alt="">
+                    <h2>Conferência e Quantitativos</h2>
+                    <small style="color:#999;">Acompanhamento de produção e materiais</small>
+                </div>
+
+                <div class="card-type" onclick="openEstoque()">
+                    <img src="https://i.postimg.cc/59BBjWb9/celeiro.png" style="height:74px; width:auto; object-fit:contain; display:block; margin:0 auto 14px;" alt="">
+                    <h2>Estoque Simulado</h2>
+                    <small style="color:#999;">Consulta de saldo por armazém</small>
+                </div>
+
+                <div class="card-type module-soon" onclick="moduleSoon('Plano Mestre de Produção')">
+                    <svg viewBox="0 0 24 24" width="64" height="64" fill="var(--primary)" style="display:block; margin:0 auto 14px;" aria-hidden="true">
+                        <rect x="3" y="13" width="4" height="8" rx="1.2"/>
+                        <rect x="10" y="8" width="4" height="13" rx="1.2"/>
+                        <rect x="17" y="3" width="4" height="18" rx="1.2"/>
+                    </svg>
+                    <h2>Plano Mestre de Produção</h2>
+                    <small style="color:#999;">Em desenvolvimento</small>
+                </div>
+
+                <div class="card-type module-soon" onclick="moduleSoon('Custos')">
+                    <svg viewBox="0 0 24 24" width="64" height="64" style="display:block; margin:0 auto 14px;" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" fill="var(--primary)"/>
+                        <text x="12" y="16.6" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" font-family="Arial, sans-serif">$</text>
+                    </svg>
+                    <h2>Custos</h2>
+                    <small style="color:#999;">Em desenvolvimento</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MÓDULO: ESTOQUE SIMULADO -->
+    <div id="scr-estoque" class="screen">
+        <div class="est-stk-top">
+            <h3>📦 Estoque Simulado</h3>
+            <button onclick="show('scr-modules')">Voltar</button>
+        </div>
+        <div class="est-stk-body">
+            <div class="stk-import-bar">
+                <button class="stk-import-btn" onclick="document.getElementById('stk-file-input').click()">
+                    <img src="https://i.postimg.cc/GtXSWRsf/image-removebg-preview-(7).png" style="height:18px;width:auto;" alt="">
+                    Importar planilha
+                </button>
+                <input type="file" id="stk-file-input" accept=".xlsx,.xls" style="display:none" onchange="stkHandleFile(event)">
+                <div class="stk-meta" id="stk-meta">
+                    <div><span class="empty">Nenhuma planilha importada ainda</span></div>
+                </div>
+            </div>
+
+            <div class="stk-search-wrap">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9aa3aa" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><line x1="21" y1="21" x2="15.8" y2="15.8"/></svg>
+                <input type="text" id="stk-search" placeholder="Pesquisar por código ou descrição do produto..." oninput="stkSearch(this.value)" autocomplete="off">
+            </div>
+
+            <div id="stk-search-result"></div>
+
+            <div class="stk-count-line" id="stk-count-line"></div>
+            <div class="stk-table-wrap">
+                <table class="stk-table">
+                    <thead><tr>
+                        <th style="width:130px;">Código</th>
+                        <th>Descrição</th>
+                        <th class="num" style="width:95px;">Armazém 1</th>
+                        <th class="num" style="width:95px;">Armazém 2</th>
+                        <th class="num" style="width:95px;">Armazém 3</th>
+                        <th class="num" style="width:95px;">Total</th>
+                    </tr></thead>
+                    <tbody id="stk-tbody">
+                        <tr><td colspan="6"><div class="stk-empty">Importe uma planilha para visualizar o estoque.</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="scr-products" class="screen">
+        <div style="width:100%; max-width:1100px;">
+            <!-- Header estilo Fill -->
+            <div style="background:#fff; border-radius:16px; padding:16px 24px; display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+                <img src="https://i.postimg.cc/sfJg4Ykr/br3-imagem.png" style="height:36px;">
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button onclick="openNewProductModal()" style="background:var(--dark); display:flex; align-items:center; gap:6px; padding:10px 18px; font-size:13px;">
+                        <span style="font-size:16px; font-weight:300;">+</span> Novo Produto
+                    </button>
+                    <button class="help-fab-inline" onclick="openHelpModal()" title="Ajuda — Como funciona o sistema" aria-label="Ajuda">?</button>
+                    <button onclick="show('scr-modules')" style="padding:10px 18px; font-size:13px;">Voltar</button>
+                </div>
+            </div>
+
+            <!-- Título -->
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:24px;">
+                <div style="width:4px; height:28px; background:var(--dark); border-radius:2px;"></div>
+                <h2 style="margin:0; font-size:22px; color:var(--dark);">Produtos Disponíveis</h2>
+            </div>
+
+            <!-- Grid de produtos -->
+            <div id="products-grid" style="display:flex; flex-wrap:wrap; gap:20px;"></div>
+        </div>
+    </div>
+
+    <!-- MODAL NOVO PRODUTO -->
+    <div id="modal-new-product" class="modal-overlay" onclick="closeNewProductModal(event)">
+        <div class="modal-box" style="max-width:860px;">
+            <div class="modal-header">
+                <h3 id="modal-prod-title">+ Novo Produto</h3>
+                <button class="modal-close" onclick="closeNewProductModal(null,true)">✕</button>
+            </div>
+            <div class="modal-body" style="padding:0;">
+
+                <!-- Abas de navegação -->
+                <div style="display:flex; border-bottom:2px solid #f0f0f0; background:#fafafa;">
+                    <button class="prod-tab active" data-tab="tab-info" onclick="switchProdTab('tab-info')">📦 Produto</button>
+                    <button class="prod-tab" data-tab="tab-eap" onclick="switchProdTab('tab-eap')">📋 EAP</button>
+                    <button class="prod-tab" data-tab="tab-seq" onclick="switchProdTab('tab-seq')">📑 Lista de Sequência</button>
+                </div>
+
+                <!-- ABA: Informações básicas -->
+                <div id="tab-info" class="prod-tab-content" style="padding:20px; display:block;">
+                    <div style="margin-bottom:14px;">
+                        <label style="font-size:12px; font-weight:700; color:#555; display:block; margin-bottom:6px;">NOME DO PRODUTO</label>
+                        <input type="text" id="new-prod-name" placeholder="Ex: STUDIO COMPACTO"
+                            style="width:100%; padding:12px 14px; border:2px solid #ddd; border-radius:10px; font-size:14px; outline:none;">
+                    </div>
+                    <div style="margin-bottom:20px;">
+                        <label style="font-size:12px; font-weight:700; color:#555; display:block; margin-bottom:6px;">LINK DA IMAGEM</label>
+                        <input type="text" id="new-prod-img" placeholder="https://..."
+                            style="width:100%; padding:12px 14px; border:2px solid #ddd; border-radius:10px; font-size:14px; outline:none;">
+                    </div>
+                </div>
+
+                <!-- ABA: EAP -->
+                <div id="tab-eap" class="prod-tab-content" style="padding:20px; display:none;">
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+                        <label style="font-size:12px; font-weight:700; color:#444;">EAP:</label>
+                        <select id="eap-selector" onchange="renderEapScope(this.value)"
+                            style="flex:1; min-width:200px; padding:9px 12px; border:2px solid #ddd; border-radius:8px; font-size:13px;"></select>
+                        <button onclick="openAddProjEap()" style="padding:9px 14px; font-size:12px; background:#6f42c1;">+ EAP por ID Projeto</button>
+                        <button id="eap-remove-btn" onclick="removeCurrentProjEap()" style="padding:9px 14px; font-size:12px; background:#dc3545; display:none;">🗑️ Remover esta EAP</button>
+                    </div>
+
+                    <div id="eap-proj-picker" style="display:none; background:#f5f0ff; border:1px solid #e0d4f7; border-radius:10px; padding:12px; margin-bottom:12px;">
+                        <div style="font-size:12px; font-weight:700; color:#5a3a9a; margin-bottom:8px;">Vincular nova EAP a um ID Projeto da Lista de Sequência</div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <select id="eap-proj-select" style="flex:1; min-width:220px; padding:9px 12px; border:2px solid #d4c2f0; border-radius:8px; font-size:13px;"></select>
+                            <button onclick="confirmAddProjEap()" style="padding:9px 14px; font-size:12px; background:#28a745;">Criar EAP</button>
+                            <button onclick="cancelAddProjEap()" style="padding:9px 14px; font-size:12px; background:#aaa;">Cancelar</button>
+                        </div>
+                        <div id="eap-proj-empty" style="display:none; font-size:11.5px; color:#a00; margin-top:8px;">
+                            Cadastre a Lista de Sequência primeiro — os IDs de Projeto vêm de lá.
+                        </div>
+                    </div>
+
+                    <div style="background:#eef7f9; border-left:3px solid var(--primary); border-radius:6px; padding:7px 11px; font-size:11.5px; color:#2b545d; margin-bottom:10px;">
+                        💡 Dica: você pode <b>colar do Excel</b> direto nas colunas Posto e Atividade. Clique numa célula e cole (Ctrl+V) — várias linhas são preenchidas de uma vez.
+                    </div>
+
+                    <div id="eap-table-area"></div>
+                    <button onclick="addEapRow(currentEapScope)" style="margin-top:10px; padding:8px 16px; font-size:12px; background:#28a745;">+ Adicionar Linha</button>
+                </div>
+
+                <!-- ABA: Lista de Sequência -->
+                <div id="tab-seq" class="prod-tab-content" style="padding:20px; display:none;">
+                    <div style="display:flex; gap:8px; margin-bottom:16px;">
+                        <button class="seq-sub-tab active" data-sub="seq-modulo" onclick="switchSeqSub('seq-modulo')" style="padding:8px 18px; font-size:12px; background:var(--dark);">🏗️ Módulo</button>
+                        <button class="seq-sub-tab" data-sub="seq-pod" onclick="switchSeqSub('seq-pod')" style="padding:8px 18px; font-size:12px; background:#aaa;">🚿 POD</button>
+                    </div>
+                    <div id="seq-modulo" class="seq-sub-content">
+                        <div id="seq-modulo-table"></div>
+                        <button onclick="addSeqRow('modulo')" style="margin-top:10px; padding:8px 16px; font-size:12px; background:#28a745;">+ Adicionar Linha</button>
+                    </div>
+                    <div id="seq-pod" class="seq-sub-content" style="display:none;">
+                        <div id="seq-pod-table"></div>
+                        <button onclick="addSeqRow('pod')" style="margin-top:10px; padding:8px 16px; font-size:12px; background:#28a745;">+ Adicionar Linha</button>
+                    </div>
+                </div>
+
+                <!-- Footer com botão salvar -->
+                <div style="padding:16px 20px; border-top:1px solid #eee; background:#fafafa;">
+                    <button onclick="addNewProduct()" style="width:100%; padding:14px; font-size:14px; background:var(--dark);">SALVAR PRODUTO</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="scr-start" class="screen">
+        <div class="header-app container">
+            <img src="https://i.postimg.cc/sfJg4Ykr/br3-imagem.png" style="height: 30px;">
+            <button class="btn-back" onclick="show('scr-products')">Voltar</button>
+        </div>
+        <div class="grid-selection">
+            <div class="card-type" onclick="loadList('MODULO')">
+                <img src="https://i.postimg.cc/RFWwGzLX/image-removebg-preview-(8).png" style="height:96px;width:auto;object-fit:contain;display:block;margin:0 auto 12px;" alt="">
+                <h2>MÓDULOS</h2>
+            </div>
+            <div class="card-type" onclick="loadList('POD')">
+                <img src="https://i.postimg.cc/Jn0smcyL/image-removebg-preview-(9).png" style="height:96px;width:auto;object-fit:contain;display:block;margin:0 auto 12px;transform:translateX(-6px);" alt="">
+                <h2>PODS</h2>
+            </div>
+            <div class="card-type" onclick="openEstrutura()" style="grid-column: 1 / -1; border-color: var(--primary);">
+                <svg viewBox="0 0 24 24" width="64" height="64" fill="var(--primary)" aria-hidden="true">
+                    <path d="M19.14 12.94a7.49 7.49 0 0 0 .05-.94 7.49 7.49 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.74 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.03.31-.05.62-.05.94 0 .32.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .45-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"/>
+                </svg>
+                <h2>Estrutura do Produto</h2>
+                <small style="color:#999;">Materiais e memorial de cálculo por unidade</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== TELA CHEIA: ESTRUTURA DO PRODUTO ===== -->
+    <div id="scr-estrutura" class="screen">
+        <div class="est-topbar">
+            <h3>Estrutura do Produto <span id="est-prod-name" class="pill"></span></h3>
+            <span id="est-sync" class="pill" style="display:none;"></span>
+            <button onclick="flushEstSave().then(()=>show('scr-start'))">Voltar</button>
+        </div>
+        <div class="est-body">
+            <!-- Barra modo GALERIA -->
+            <div id="est-gallery-bar" class="est-proj-bar">
+                <div class="est-proj-search">
+                    <input type="text" id="est-gallery-filter" autocomplete="off"
+                        placeholder="🔎 Buscar unidade (Cód. Produto, Projeto ou OP)..."
+                        oninput="onEstGalleryFilter(this.value)">
+                </div>
+            </div>
+
+            <!-- Barra modo EDITOR -->
+            <div id="est-editor-bar" style="display:none; align-items:center; gap:14px; margin-bottom:14px; flex-wrap:wrap;">
+                <button onclick="backToGallery()" style="background:#555;">← Unidades</button>
+                <div>
+                    <div id="est-editor-title" style="font-size:15px;"></div>
+                    <div id="est-editor-sub" style="font-size:12px; color:#888;"></div>
+                </div>
+            </div>
+
+            <div id="est-warn" class="est-warn"></div>
+
+            <div id="est-grid-area">
+                <div class="est-empty">Carregando...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: QUANTITATIVO ===== -->
+    <div id="modal-quant" class="modal-overlay" onclick="closeQuantModal(event)">
+        <div class="modal-box" style="max-width:640px;">
+            <div class="modal-header" style="background:var(--dark);">
+                <h3>📦 Quantitativo de Material</h3>
+                <button class="modal-close" onclick="closeQuantModal(null,true)">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-input-wrap">
+                    <span class="ico">📦</span>
+                    <input type="text" id="quant-input" placeholder="Ex: TINTA ACRILICA ou 1.05.001433"
+                        oninput="onQuantInput(this.value)" autocomplete="off">
+                </div>
+                <div class="search-hint">Busque um material para ver a quantidade pendente em cada unidade.</div>
+                <div id="quant-suggestions" class="search-suggestions" style="display:none"></div>
+                <div id="quant-results-area"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: AJUDA / COMO FUNCIONA O SISTEMA ===== -->
+    <div id="modal-help" class="modal-overlay" onclick="closeHelpModal(event)">
+        <div class="modal-box help-box">
+            <div class="help-header">
+                <button class="modal-close" style="position:absolute; top:18px; right:20px;" onclick="closeHelpModal(null,true)">✕</button>
+                <h2>Como funciona o sistema</h2>
+                <p>Guia passo a passo — Módulos, Pods, Estrutura do Produto e Quantitativo</p>
+                <span class="help-tag">PROCEDIMENTO OPERACIONAL</span>
+            </div>
+
+            <div class="help-body">
+                <div class="help-toc">
+                    <a onclick="helpGo('h-1')">1. Visão geral</a>
+                    <a onclick="helpGo('h-2')">2. Login</a>
+                    <a onclick="helpGo('h-3')">3. Produtos</a>
+                    <a onclick="helpGo('h-4')">4. Módulos / Pods / Estrutura</a>
+                    <a onclick="helpGo('h-5')">5. Conferência</a>
+                    <a onclick="helpGo('h-6')">6. Pesquisar atividade</a>
+                    <a onclick="helpGo('h-7')">7. Estrutura do Produto</a>
+                    <a onclick="helpGo('h-8')">8. Quantitativo</a>
+                    <a onclick="helpGo('h-9')">9. Excel</a>
+                    <a onclick="helpGo('h-10')">10. Cálculo do consumo</a>
+                    <a onclick="helpGo('h-11')">11. Boas práticas e limitações</a>
+                </div>
+
+                <div class="help-section" id="h-1">
+                    <h3><span class="num">1</span> Visão geral e conceitos</h3>
+                    <p>O sistema controla a conferência de atividades de produção de unidades modulares e o consumo de materiais por unidade. Tudo é salvo em tempo real na nuvem (Firebase), então vários usuários veem o mesmo estado.</p>
+                    <table class="help-table">
+                        <tr><th>Termo</th><th>O que significa no sistema</th></tr>
+                        <tr><td><b>Produto</b></td><td>Uma linha de fabricação (ex.: EXPRESS). Cada produto tem sua própria EAP, Lista de Sequência e estruturas, separadas dos demais.</td></tr>
+                        <tr><td><b>Módulo / Pod</b></td><td>Os dois tipos de unidade que compõem um produto. Cada tipo tem sua própria lista de atividades.</td></tr>
+                        <tr><td><b>Unidade física</b></td><td>Uma peça concreta a produzir, identificada pelo <b>Cód. Produto</b> (ex.: EXPRESS 491), com ID do Projeto e OP.</td></tr>
+                        <tr><td><b>EAP</b></td><td>Lista de atividades de cada tipo, definida por <b>Posto de trabalho</b> + <b>Atividade</b>.</td></tr>
+                        <tr><td><b>Lista de Sequência</b></td><td>Relação das unidades físicas de cada tipo (Cód. Produto, ID do Projeto, OP).</td></tr>
+                        <tr><td><b>Estrutura do Produto</b></td><td>Lista de materiais (com quantidade) consumidos em cada atividade de uma unidade específica.</td></tr>
+                        <tr><td><b>Conferência (check)</b></td><td>Marcação de que uma atividade foi concluída numa unidade, com data opcional.</td></tr>
+                    </table>
+                    <div class="help-note">
+                        <b>Onde os dados ficam:</b> consumido e pendente <b>não</b> são gravados como saldo — são sempre calculados na hora a partir dos checks, o que evita erros ao desmarcar ou re-sincronizar.
+                    </div>
+                </div>
+
+                <div class="help-section" id="h-2">
+                    <h3><span class="num">2</span> Acesso ao sistema (login)</h3>
+                    <ol class="help-steps">
+                        <li>Abra o sistema. A primeira tela é a de login.</li>
+                        <li>Clique em <span class="help-kbd">ENTRAR</span> para acessar a tela de produtos.</li>
+                        <li>Para sair, use o botão <span class="help-kbd">Sair</span> no topo da tela de produtos.</li>
+                    </ol>
+                    <div class="help-note warn">
+                        <b>Atenção:</b> esta tela não pede senha — o botão Entrar dá acesso direto. Não há usuário individual nem registro de quem fez cada conferência.
+                    </div>
+                </div>
+
+                <div class="help-section" id="h-3">
+                    <h3><span class="num">3</span> Tela de produtos</h3>
+                    <p>Mostra todos os produtos em cards. O EXPRESS é o modelo base e aparece primeiro.</p>
+                    <h4>Selecionar</h4>
+                    <ol class="help-steps">
+                        <li>Clique no card do produto (imagem ou nome).</li>
+                        <li>O sistema carrega a EAP e a Sequência e abre a tela de seleção.</li>
+                    </ol>
+                    <div class="help-note">Um produto que já tem estrutura cadastrada exibe um <b>selo verde com check</b> no canto superior esquerdo do card.</div>
+                    <h4>Criar, editar e excluir</h4>
+                    <ol class="help-steps">
+                        <li><b>Novo:</b> preencha nome e imagem, depois a EAP e a Sequência (Módulo e Pod).</li>
+                        <li><b>Editar:</b> menu <span class="help-kbd">⋮</span> &rarr; <span class="help-kbd">✏️ Editar Produto</span>. Ao salvar, atualiza o mesmo produto e preserva as estruturas.</li>
+                        <li><b>Excluir:</b> menu <span class="help-kbd">⋮</span> &rarr; <span class="help-kbd">🗑️ Excluir Produto</span> e confirme.</li>
+                    </ol>
+                    <div class="help-note warn"><b>O EXPRESS é especial:</b> não permite editar EAP/Sequência, mas aceita normalmente o cadastro de estruturas.</div>
+                </div>
+
+                <div class="help-section" id="h-4">
+                    <h3><span class="num">4</span> Módulos, Pods e Estrutura do Produto</h3>
+                    <p>Após escolher um produto, há três caminhos:</p>
+                    <table class="help-table">
+                        <tr><th>Opção</th><th>Para que serve</th></tr>
+                        <tr><td><b>Módulos</b></td><td>Lista de unidades tipo Módulo para conferência.</td></tr>
+                        <tr><td><b>Pods</b></td><td>Lista de unidades tipo Pod para conferência.</td></tr>
+                        <tr><td><b>Estrutura do Produto</b></td><td>Galeria de unidades para cadastrar materiais e consultar o Quantitativo.</td></tr>
+                    </table>
+                </div>
+
+                <div class="help-section" id="h-5">
+                    <h3><span class="num">5</span> Lista de unidades e conferência (check)</h3>
+                    <p>Em Módulos ou Pods aparece a lista de unidades, cada uma com Cód. Produto, ID do Projeto e OP.</p>
+                    <ol class="help-steps">
+                        <li>Clique na unidade para abrir a conferência com as atividades da EAP.</li>
+                        <li>Cada linha traz a atividade e, conforme configurado, um campo de <b>data</b> e uma <b>caixa de seleção</b> de conclusão.</li>
+                        <li>Marque o check ao concluir; preencha a data quando aplicável.</li>
+                        <li>Tudo é salvo automaticamente. O indicador mostra <span class="help-kbd">☁️ Sincronizado</span> ou <span class="help-kbd">⏳ Salvando…</span>.</li>
+                    </ol>
+                    <div class="help-note">Marcar uma atividade faz o material vinculado a ela passar a contar como <b>consumido</b>; enquanto não marcada, conta como <b>pendente</b>.</div>
+                </div>
+
+                <div class="help-section" id="h-6">
+                    <h3><span class="num">6</span> Pesquisar atividade</h3>
+                    <p>O botão <span class="help-kbd">🔍 Pesquisar</span> localiza uma atividade e mostra, em todas as unidades, onde está concluída ou pendente.</p>
+                    <ol class="help-steps">
+                        <li>Clique em <span class="help-kbd">🔍 Pesquisar</span> e digite parte do nome da atividade.</li>
+                        <li>Selecione a atividade nas sugestões.</li>
+                        <li>O resultado mostra cada unidade com bolinha verde (concluída) ou vermelha (pendente).</li>
+                        <li>Havendo materiais cadastrados para a atividade, eles aparecem abaixo com código, descrição, quantidade e status (✓ consumido / ● pendente).</li>
+                    </ol>
+                </div>
+
+                <div class="help-section" id="h-7">
+                    <h3><span class="num">7</span> Estrutura do Produto (materiais)</h3>
+                    <p>Define quais materiais cada unidade consome em cada atividade. Acesse pelo card <b>Estrutura do Produto</b>.</p>
+                    <h4>Galeria de unidades</h4>
+                    <p>Um card por unidade física, com Cód. Produto, ID do Projeto, OP e selo verde quando já tem estrutura. Há busca por código, projeto ou OP.</p>
+                    <h4>Editar a estrutura</h4>
+                    <ol class="help-steps">
+                        <li>Clique no card da unidade para abrir a grade de materiais.</li>
+                        <li>Preencha uma linha por material (colunas abaixo).</li>
+                    </ol>
+                    <table class="help-table">
+                        <tr><th>Coluna</th><th>Conteúdo</th><th>Exemplo</th></tr>
+                        <tr><td>Posto</td><td>Posto (precisa existir na EAP)</td><td>LP 07</td></tr>
+                        <tr><td>Atividade</td><td>Atividade (precisa existir na EAP)</td><td>PINTURA 1ª DEMÃO</td></tr>
+                        <tr><td>Código</td><td>Código do material</td><td>1.05.001433</td></tr>
+                        <tr><td>Descrição</td><td>Descrição do material</td><td>TINTA ACRÍLICA…</td></tr>
+                        <tr><td>Qtd. Unit.</td><td>Quantidade na atividade</td><td>2.34</td></tr>
+                        <tr><td>Un.</td><td>Unidade de medida</td><td>L</td></tr>
+                    </table>
+                    <h4>Recursos da grade</h4>
+                    <ul>
+                        <li><b>Colar do Excel:</b> copie as colunas na mesma ordem, clique numa célula e cole (<span class="help-kbd">Ctrl+V</span>). Centenas de linhas são criadas automaticamente.</li>
+                        <li><b>+ 20 linhas:</b> adiciona linhas em branco.</li>
+                        <li><b>Excluir linhas:</b> apaga todas, mantendo só a primeira em branco.</li>
+                        <li><b>Salvamento automático</b> com indicador <span class="help-kbd">☁️ Salvo</span>. Ao sair, grava o pendente antes de fechar.</li>
+                    </ul>
+                    <div class="help-note warn"><b>Material órfão:</b> linha com Posto+Atividade que não existe na EAP fica em vermelho e nunca conta como consumido/pendente. Confira a grafia.</div>
+                </div>
+
+                <div class="help-section" id="h-8">
+                    <h3><span class="num">8</span> Quantitativo (material pendente)</h3>
+                    <p>O botão <span class="help-kbd">📦 Quantitativo</span> responde: "quanto deste material ainda falta consumir?".</p>
+                    <ol class="help-steps">
+                        <li>Clique em <span class="help-kbd">📦 Quantitativo</span> e digite o código ou descrição.</li>
+                        <li>Selecione o material nas sugestões.</li>
+                        <li>O sistema mostra, por unidade, a quantidade pendente, além do total e do número de unidades com pendência.</li>
+                    </ol>
+                    <div class="help-note">O material de uma atividade conta como pendente enquanto a atividade não estiver concluída. Ao marcar, aquela parcela some do pendente.</div>
+                </div>
+
+                <div class="help-section" id="h-9">
+                    <h3><span class="num">9</span> Exportação para Excel</h3>
+                    <p>O botão <span class="help-kbd">Excel</span> gera uma planilha <span class="help-kbd">.xlsx</span> com a matriz de conferência do tipo atual (Módulo ou Pod): Posto, Atividade, datas e status de cada unidade.</p>
+                </div>
+
+                <div class="help-section" id="h-10">
+                    <h3><span class="num">10</span> Como o consumo é calculado</h3>
+                    <table class="help-table">
+                        <tr><th>Etapa</th><th>O que o sistema faz</th></tr>
+                        <tr><td>1</td><td>Identifica a atividade marcada (Posto + Atividade) na unidade.</td></tr>
+                        <tr><td>2</td><td>Procura na Estrutura daquela unidade as linhas com o mesmo Posto + Atividade.</td></tr>
+                        <tr><td>3</td><td>Lê a quantidade unitária prevista de cada material.</td></tr>
+                        <tr><td>4</td><td>Atividade concluída &rarr; material consumido; senão &rarr; pendente.</td></tr>
+                        <tr><td>5</td><td>Soma o pendente por unidade e o total geral, exibidos no Quantitativo.</td></tr>
+                    </table>
+                    <div class="help-note"><b>Exemplo:</b> 2 atividades pendentes usando o mesmo material, cada uma consumindo 2 unidades &rarr; <b>4 unidades pendentes</b>. Ao concluir uma, cai para 2.</div>
+                </div>
+
+                <div class="help-section" id="h-11">
+                    <h3><span class="num">11</span> Boas práticas e limitações</h3>
+                    <h4>Boas práticas</h4>
+                    <ul>
+                        <li>Cadastre a Lista de Sequência antes — sem ela, não há unidades na galeria de estrutura.</li>
+                        <li>Use a mesma grafia de Posto e Atividade da EAP, para não gerar material órfão.</li>
+                        <li>Ao colar do Excel, mantenha a ordem: Posto, Atividade, Código, Descrição, Qtd, Unidade.</li>
+                        <li>Aguarde <span class="help-kbd">☁️ Salvo</span> antes de fechar a aba.</li>
+                        <li>Após cadastrar uma estrutura, atualize a página e confirme que ela permanece.</li>
+                    </ul>
+                    <h4>Limitações conhecidas</h4>
+                    <div class="help-note danger">
+                        <ul style="margin:0; padding-left:18px;">
+                            <li><b>Estrutura por unidade física:</b> cada Cód. Produto é independente; unidades iguais exigem recadastrar a lista.</li>
+                            <li><b>Renomear o Cód. Produto</b> na Sequência desvincula a estrutura já cadastrada.</li>
+                            <li><b>Fechar a aba</b> na fração de segundo antes do salvamento pode perder a última edição.</li>
+                            <li><b>Excluir um produto</b> pode deixar conferências antigas armazenadas.</li>
+                            <li><b>Quantitativo agrupa material por código + descrição exatos.</b></li>
+                            <li><b>Sem senha / sem usuários:</b> acesso direto, sem registro de quem conferiu.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="scr-list" class="screen">
+        <div class="container">
+            <div class="header-app">
+                <h3 id="list-title" style="margin:0;">Unidades</h3>
+                <div style="display: flex; gap: 10px;">
+                    <button style="background:#217346; display:inline-flex; align-items:center; gap:6px;" onclick="doExcelAll()"><img src="https://i.postimg.cc/GtXSWRsf/image-removebg-preview-(7).png" style="height:17px; width:auto;" alt="">Excel</button>
+                    <button style="background:var(--primary); display:inline-flex; align-items:center; justify-content:center; gap:7px;" onclick="openSearchModal()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><line x1="21" y1="21" x2="15.8" y2="15.8"/></svg>Pesquisar</button>
+                    <button style="background:var(--primary); display:inline-flex; align-items:center; justify-content:center; gap:7px;" onclick="openQuantModal()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><line x1="21" y1="21" x2="15.8" y2="15.8"/></svg>Quantitativo</button>
+                    <button onclick="show('scr-start')">Voltar</button>
+                </div>
+            </div>
+            <div class="table-card">
+                <table>
+                    <thead><tr><th>ID Projeto</th><th>Cód. Express</th><th>OP</th><th>Status Atual</th><th>Gestão</th></tr></thead>
+                    <tbody id="body-units"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="scr-check" class="screen">
+        <div id="sync-status" class="status-sync">☁️ Sincronizado</div>
+        <div class="container" style="margin-bottom: 250px;">
+            <div id="info-header" style="background: var(--dark); color: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; display: flex; justify-content: space-around; font-size: 11px; text-align: center;"></div>
+            <div id="items-container" class="check-container"></div>
+        </div>
+
+        <div class="action-bar">
+            <div style="width:100%">
+                <div style="display:flex; justify-content:space-between; font-weight:700; font-size:11px;">
+                    <span>PROGRESSO</span><span id="pct-txt">0%</span>
+                </div>
+                <div style="background:#eee; height:8px; border-radius:4px; margin:5px 0; overflow:hidden">
+                    <div id="bar-fill" style="background:var(--primary); height:100%; width:0%; transition:0.6s"></div>
+                </div>
+                <textarea id="obs-main" placeholder="Observações e pendências..." onblur="saveSingleField('obs', this.value)"></textarea>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; width:100%">
+                <button style="background:#217346; display:inline-flex; align-items:center; justify-content:center; gap:6px;" onclick="doExcel()"><img src="https://i.postimg.cc/GtXSWRsf/image-removebg-preview-(7).png" style="height:17px; width:auto;" alt="">Excel</button>
+                <button onclick="doPDF()">Gerar PDF</button>
+                <button style="grid-column: span 2; background:#333; color:white" onclick="exitCheck()">SALVAR E SAIR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE PESQUISA DE ATIVIDADES -->
+    <div id="modal-search" class="modal-overlay" onclick="closeSearchModal(event)">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>🔍 Pesquisar Atividade</h3>
+                <button class="modal-close" onclick="closeSearchModal(null, true)">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-input-wrap">
+                    <span class="ico">🔍</span>
+                    <input type="text" id="search-activity-input"
+                        placeholder="Ex: PREPARAÇÃO IMPERMEABILIZAÇÃO DO PISO"
+                        oninput="onSearchInput(this.value)"
+                        autocomplete="off">
+                </div>
+                <div class="search-hint">Digite o nome da atividade para ver em quais unidades ela foi concluída.</div>
+                <div id="search-suggestions" class="search-suggestions" style="display:none"></div>
+                <div id="search-results-area"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMAÇÃO EXCLUSÃO DE PRODUTO -->
+    <div id="modal-confirm-delete" class="modal-overlay" onclick="if(event.target===this) this.classList.remove('open')">
+        <div class="modal-box" style="max-width:420px; margin:auto;">
+            <div class="modal-header" style="background:#e53935;">
+                <h3>🗑️ Excluir Produto</h3>
+                <button class="modal-close" onclick="document.getElementById('modal-confirm-delete').classList.remove('open')">&#x2715;</button>
+            </div>
+            <div class="modal-body" style="padding:28px 24px;">
+                <p style="font-size:15px; color:#333; margin:0 0 6px; line-height:1.5;">
+                    Você tem certeza que deseja excluir o produto
+                </p>
+                <p style="font-size:17px; font-weight:800; color:#e53935; margin:0 0 20px;" id="confirm-delete-name"></p>
+                <p style="font-size:13px; color:#888; margin:0 0 24px;">Esta ação é permanente e não pode ser desfeita.</p>
+                <input type="hidden" id="confirm-delete-idx">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <button onclick="document.getElementById('modal-confirm-delete').classList.remove('open')" style="background:#f0f0f0; color:#333;">Cancelar</button>
+                    <button onclick="executeDeleteProduct()" style="background:#e53935;">Sim, excluir</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURAÇÃO FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyCuI-JSXWNzLCscFowXYZVRHsSN95Z_LEU",
+            authDomain: "sistema-conferencia-24505.firebaseapp.com",
+            projectId: "sistema-conferencia-24505",
+            databaseURL: "https://sistema-conferencia-24505-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let cur = {};
+        let currentListType = '';
+
+        // BANCO DE DADOS LEGADO (EXPRESS) - mantido como fallback enquanto não migrado
+        const LEGACY_DBM = [
+            ["7.00.SGC0018","EXPRESS 291","006307"], ["7.00.0000015","EXPRESS 292","006306"],
+            ["7.00.SGC0017","EXPRESS 293","006308"], ["7.00.0000014","EXPRESS 294","006309"],
+            ["7.00.SGC0016","EXPRESS 295","006310"], ["7.00.0000015","EXPRESS 296","006311"],
+            ["7.00.SGC0013","EXPRESS 297","006312"], ["7.00.0000014","EXPRESS 298","006313"],
+            ["7.00.0000018","EXPRESS 299","006314"], ["7.00.0000015","EXPRESS 300","006315"],
+            ["7.00.0000017","EXPRESS 301","006316"], ["7.00.0000014","EXPRESS 302","006317"],
+            ["7.00.0000016","EXPRESS 303","006641"], ["7.00.0000015","EXPRESS 304","006319"],
+            ["7.00.0000013","EXPRESS 305","006320"], ["7.00.0000014","EXPRESS 306","006321"],
+            ["7.00.SGC0018","EXPRESS 307","007064"], ["7.00.0000015","EXPRESS 308","007059"],
+            ["7.00.SGC0017","EXPRESS 309","007066"], ["7.00.0000014","EXPRESS 310","007060"],
+            ["7.00.SGC0016","EXPRESS 311","007067"], ["7.00.0000015","EXPRESS 312","007062"],
+            ["7.00.SGC0013","EXPRESS 313","007068"], ["7.00.0000014","EXPRESS 314","007063"],
+            ["7.00.0000018","EXPRESS 315","007294"], ["7.00.0000015","EXPRESS 316","007290"],
+            ["7.00.0000017","EXPRESS 317","007295"], ["7.00.0000014","EXPRESS 318","007291"],
+            ["7.00.0000016","EXPRESS 319","007296"], ["7.00.0000015","EXPRESS 320","007292"],
+            ["7.00.0000013","EXPRESS 321","007297"], ["7.00.0000014","EXPRESS 322","007293"]
+        ];
+        const LEGACY_DBP = [
+            ["7.00.SGC0018","EXPRESS 291","006307"], ["7.00.SGC0017","EXPRESS 293","006308"],
+            ["7.00.SGC0016","EXPRESS 295","006310"], ["7.00.SGC0013","EXPRESS 297","006312"],
+            ["7.00.0000018","EXPRESS 299","006314"], ["7.00.0000017","EXPRESS 301","006316"],
+            ["7.00.0000016","EXPRESS 303","006318"], ["7.00.0000013","EXPRESS 305","006320"],
+            ["7.00.SGC0018","EXPRESS 307","007142"], ["7.00.SGC0017","EXPRESS 309","007143"],
+            ["7.00.SGC0016","EXPRESS 311","007144"], ["7.00.SGC0013","EXPRESS 313","007145"],
+            ["7.00.0000018","EXPRESS 315","007323"], ["7.00.0000017","EXPRESS 317","007324"],
+            ["7.00.0000016","EXPRESS 319","007325"], ["7.00.0000013","EXPRESS 321","007326"]
+        ];
+        const LEGACY_TM = [
+            {p:"CORTE DOS PILARES - SL 01", a:"INICIO", d:1}, {p:"CORTE DOS PILARES - SL 01", a:"FIM", d:1}, {p:"CORTE DOS PILARES - SL 01", a:"CONCLUÍDO", c:1},
+            {p:"CORTE DOS MÓDULOS - SL 01", a:"INICIO", d:1}, {p:"CORTE DOS MÓDULOS - SL 01", a:"FIM", d:1}, {p:"CORTE DOS MÓDULOS - SL 01", a:"CONCLUÍDO", c:1},
+            {p:"SL 02", a:"MONT. PILARES", c:1},
+            {p:"SL 03 - A", a:"MONT. PAREDES MENORES (FRENTE)", c:1}, {p:"SL 03 - A", a:"MONT. PAREDES MENORES (ATRÁS)", c:1},
+            {p:"SL 03 - B", a:"MONT. PAREDES MAIORES (ESQ.)", c:1}, {p:"SL 03 - B", a:"MONT. PAREDES MAIORES (DIR.)", c:1},
+            {p:"SL 03 - C", a:"MONT. COBERTURA", c:1}, {p:"SL 03 - C", a:"MONT. PISO", c:1},
+            {p:"SL 05", a:"CORTE PORCELANATO", c:1}, {p:"SL 06", a:"CORTE DE PLACAS", c:1}, {p:"SL 04", a:"EMPLACAMENTO", c:1},
+            {p:"SL 09", a:"FECHAMENTO PISO", c:1}, {p:"SL 09", a:"FECHAMENTO PISO", c:1},
+            {p:"VOLUMETRIZAÇÃO - SL 10", a:"DATA INICIO", d:1}, {p:"VOLUMETRIZAÇÃO - SL 10", a:"DATA FIM", d:1}, {p:"VOLUMETRIZAÇÃO - SL 10", a:"CONCLUÍDO", c:1},
+            {p:"SL 11", a:"CHICOTE ELÉTRICO", c:1}, {p:"SL 12", a:"KIT HIDRÁULICO", c:1}, {p:"SL 14", a:"PINTURA", c:1},
+            {p:"LP 01", a:"INST. ELÉTRICA", c:1, t:'lp'}, {p:"LP 01", a:"INST. HIDRAULICA + CLIMATIZAÇÃO", c:1, t:'lp'}, {p:"LP 01", a:"LÃ DE PET", c:1, t:'lp'},
+            {p:"LP 01", a:"FECHAMENTO DO FORRO", c:1, t:'lp'}, {p:"LP 01", a:"FECHAMENTO 2ª FACE", c:1, t:'lp'}, {p:"LP 01", a:"CORTES NO FORRO", c:1, t:'lp'}, {p:"LP 01", a:"PREPARAÇÃO IMPERMEABILIZAÇÃO DO PISO", c:1, t:'lp'},
+            {p:"LP 02", a:"APLICAÇÃO D11", c:1, t:'lp'}, {p:"LP 02", a:"APLICAÇÃO DF-9", c:1, t:'lp'},
+            {p:"LP 03", a:"TRATAMENTO DE JUNTAS 1ª DEMÃO", c:1, t:'lp'}, {p:"LP 03", a:"TRATAMENTO DE JUNTAS 2ª DEMÃO", c:1, t:'lp'}, {p:"LP 03", a:"INST. SOLEIRA", c:1, t:'lp'},
+            {p:"LP 04", a:"INST. REQUADROS", c:1, t:'lp'}, {p:"LP 04", a:"TRATAMENTO DE JUNTAS 3ª DEMÃO", c:1, t:'lp'}, {p:"LP 04", a:"ASSENTAMENTO DO PISO", c:1, t:'lp'},
+            {p:"LP 05", a:"ASSENTAMENTO DO PISO", c:1, t:'lp'}, {p:"LP 05", a:"REVISTIMENTO DE PAREDE", c:1, t:'lp'},
+            {p:"LP 06", a:"REVISTIMENTO DE PAREDE", c:1, t:'lp'}, {p:"LP 06", a:"LIXAR TRATAMENTO + FUNDO PREPARADOR", c:1, t:'lp'}, {p:"LP 06", a:"APLICAÇÃO DE FUNDO BRANCO", c:1, t:'lp'},
+            {p:"LP 07", a:"FECHAMENTO PAREDE EXTERNA (TYVEKK + SIDING)", c:1, t:'lp'}, {p:"LP 07", a:"INST. FORRO PVC", c:1, t:'lp'}, {p:"LP 07", a:"PINTURA 1ª DEMÃO + CATADOS", c:1, t:'lp'}, {p:"LP 07", a:"REJUNTE", c:1, t:'lp'}, {p:"LP 07", a:"LIXAR CATADOS + PINTURA 2ª DEMÃO", c:1, t:'lp'},
+            {p:"LP 08", a:"FECHAMENTO PAREDE EXTERNA (TYVEKK + SIDING)", c:1, t:'lp'}, {p:"LP 08", a:"LIMPEZA DO REJUNTE", c:1, t:'lp'}, {p:"LP 08", a:"INST. ESQUADRIAS DE ALUMÍNIO", c:1, t:'lp'},
+            {p:"LP 09", a:"APLICAÇÃO DE PRIMER PAREDES EXTERNAS", c:1, t:'lp'}, {p:"LP 09", a:"PINTURA 1ª DEMÃO PAREDES EXTERNAS", c:1, t:'lp'}, {p:"LP 09", a:"PINTURA 2ª DEMÃO DAS PAREDES EXTERNAS", c:1, t:'lp'}, {p:"LP 09", a:"INSTALAÇÃO DOS ACABAMENTOS ELÉTRICOS", c:1, t:'lp'}, {p:"LP 09", a:"CATADOS COM MASSA CORRIDA", c:1, t:'lp'}, {p:"LP 09", a:"INSTALAÇÃO DAS PORTAS DE MADEIRA", c:1, t:'lp'},
+            {p:"LP 10", a:"VEDAÇÃO DAS PAREDES EXTERNAS", c:1, t:'lp'}, {p:"LP 10", a:"INSTALAÇÃO DAS VISTAS + RODAPÉS", c:1, t:'lp'}, {p:"LP 10", a:"ISOLAMENTO + LIXAR CATADOS + PINTURA 3ª DEMÃO", c:1, t:'lp'}, {p:"LP 10", a:"ACABAMENTOS EM SILICONE", c:1, t:'lp'},
+            {p:"LP 10", a:"FINALIZAÇÃO (DATA)", d:1, t:'lp'}, {p:"LP 10", a:"DATA CARREGAMENTO", d:1, t:'lp'}
+        ];
+        const LEGACY_TP = [
+            {p:"CORTESL 01", a:"DATA INÍCIO", d:1}, {p:"CORTESL 01", a:"DATA FIM", d:1}, {p:"CORTESL 01", a:"CONCLUÍDO", c:1},
+            {p:"SL 02", a:"MONTAGEM DOS QUADROS DE METALON", c:1}, {p:"SL 03", a:"EMPLACAMENTO DOS QUADROS DE METALON", c:1}, {p:"SL 05", a:"CORTE DE PLACAS", c:1},
+            {p:"VOL-SL 07", a:"DATA INÍCIO", d:1}, {p:"VOL-SL 07", a:"DATA FIM", d:1}, {p:"VOL-SL 07", a:"CONCLUÍDO", c:1},
+            {p:"SL 08-DIA 1", a:"INST. ELÉTRICA", c:1}, {p:"SL 08-DIA 1", a:"INST. HIDRÁULICA + TESTE DE ESTANQUEIDADE", c:1}, {p:"SL 08-DIA 1", a:"PREPARAÇÃO DA SUPERFICIE", c:1},
+            {p:"SL 08 - DIA 2", a:"APLICAÇÃO D11", c:1}, {p:"SL 08-DIA 2", a:"APLICAÇÃO DF-9", c:1}, {p:"SL 08-DIA 2", a:"LÃ DE PET", c:1},
+            {p:"SL 08-DIA 3", a:"CERÂMICA PISO", c:1}, {p:"SL 08-DIA 3", a:"CERÂMICA PAREDE", c:1}, {p:"SL 08-DIA 4", a:"CERÂMICA PAREDE", c:1},
+            {p:"SL 08-DIA 5", a:"INSTALAÇÃO DO FORRO PVC", c:1}, {p:"SL 08-DIA 5", a:"REJUNTE", c:1}, {p:"SL 08-DIA 6", a:"LIMPEZA REJUNTE", c:1},
+            {p:"SL 08-DIA 6", a:"INST. ACABAMENTO ELÉTRICO", c:1}, {p:"SL 08 - DIA 6", a:"INST. LOUÇAS E METAIS", c:1}, {p:"SL 08 - DIA 6", a:"INST. PORTA DE MADEIRA", c:1},
+            {p:"SL 08-DIA 7", a:"INST. PORTINHOLA", c:1}, {p:"SL 08-DIA 7", a:"INST. VISTAS INTERNAS", c:1}, {p:"SL 08 - DIA 7", a:"INST. NICHO", c:1}, {p:"SL 08-DIA 7", a:"ACABAMENTO EM SILICONE", c:1}
+        ];
+
+        // Estado dinâmico: produto ativo e suas configurações
+        let currentProduct = null; // { id, name, img, eap: {modulo, pod}, seq: {modulo, pod} }
+        let dbM = [], dbP = [], tM = [], tP = [];
+        let currentEapByProj = {};   // EAPs específicas por projeto do produto atual ({ "MODULO_<idProj>": [...], ... })
+
+        // Buffers temporários do modal (editor em memória antes de salvar)
+        let modalEap = { modulo: [], pod: [] };
+        let modalSeq = { modulo: [], pod: [] };
+
+        // FUNÇÃO NAVEGAÇÃO
+        async function show(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            window.scrollTo(0,0);
+            if(id === 'scr-products') {
+                await loadProducts();
+                renderProducts();
+            }
+        }
+
+        // ============================================================
+        // ===== MÓDULO: ESTOQUE SIMULADO =============================
+        // ============================================================
+        // Modelo Firebase (nó único, não milhares de filhos):
+        //   estoque/dados = [ { c:codigo, d:descricao, a:armazem, s:saldo }, ... ]
+        //   estoque/meta  = { arquivo, dataHora, total }
+        // Busca: tudo em memória (instantâneo). Só armazéns 1, 2 e 3.
+
+        const STK_ARMAZENS = {
+            '1': 'Armazém 1 – Produtivo',
+            '2': 'Armazém 2 – Almox. Central',
+            '3': 'Armazém 3 – Almox. Humaitá'
+        };
+        let stkData = [];   // espelho em memória (dados brutos: 1 por código+armazém)
+        let stkGrouped = []; // agrupado por código: { c, d, w:{1,2,3}, total }
+        let stkMeta = null;
+        let stkSearchTimer = null;
+
+        async function openEstoque() {
+            show('scr-estoque');
+            document.getElementById('stk-search').value = '';
+            document.getElementById('stk-search-result').innerHTML = '';
+            document.getElementById('stk-tbody').innerHTML =
+                '<tr><td colspan="6"><div class="stk-empty">⏳ Carregando estoque...</div></td></tr>';
+            try {
+                const [dSnap, mSnap] = await Promise.all([
+                    db.ref('estoque/dados').once('value'),
+                    db.ref('estoque/meta').once('value')
+                ]);
+                const raw = dSnap.val();
+                stkData = Array.isArray(raw) ? raw : (raw ? Object.values(raw) : []);
+                stkMeta = mSnap.val() || null;
+            } catch (e) {
+                stkData = []; stkMeta = null;
+            }
+            buildStkGrouped();
+            renderStkMeta();
+            renderStkTable(stkGrouped);
+        }
+
+        // Agrupa os dados brutos por código → 1 linha por produto, com saldo de cada armazém
+        function buildStkGrouped() {
+            const map = {};
+            stkData.forEach(r => {
+                if (!map[r.c]) map[r.c] = { c: r.c, d: r.d || '', w: {1:0, 2:0, 3:0}, total: 0 };
+                const s = parseFloat(r.s) || 0;
+                map[r.c].w[r.a] = (map[r.c].w[r.a] || 0) + s;
+                map[r.c].total += s;
+                if (!map[r.c].d && r.d) map[r.c].d = r.d;
+            });
+            stkGrouped = Object.values(map).sort((a, b) => a.c.localeCompare(b.c));
+        }
+
+        function renderStkMeta() {
+            const el = document.getElementById('stk-meta');
+            if (!stkMeta) {
+                el.innerHTML = '<div><span class="empty">Nenhuma planilha importada ainda</span></div>';
+                return;
+            }
+            el.innerHTML = `
+                <div><span>Última importação</span><b>${stkMeta.dataHora || '—'}</b></div>
+                <div><span>Arquivo</span><b>${stkMeta.arquivo || '—'}</b></div>
+                <div><span>Itens carregados</span><b>${(stkMeta.total || 0).toLocaleString('pt-BR')}</b></div>
+                <div><span>Produtos distintos</span><b>${stkGrouped.length.toLocaleString('pt-BR')}</b></div>`;
+        }
+
+        // Renderiza a tabela agrupada (1 linha por produto). Limita exibição para não travar o DOM.
+        const STK_RENDER_LIMIT = 1000;
+        function renderStkTable(rows) {
+            const tbody = document.getElementById('stk-tbody');
+            const countLine = document.getElementById('stk-count-line');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="6"><div class="stk-empty">' +
+                    (stkGrouped.length ? 'Nenhum produto encontrado.' : 'Importe uma planilha para visualizar o estoque.') +
+                    '</div></td></tr>';
+                countLine.textContent = '';
+                return;
+            }
+            const shown = rows.slice(0, STK_RENDER_LIMIT);
+            countLine.textContent = rows.length > STK_RENDER_LIMIT
+                ? `Exibindo ${STK_RENDER_LIMIT.toLocaleString('pt-BR')} de ${rows.length.toLocaleString('pt-BR')} produtos — refine a busca para ver itens específicos.`
+                : `${rows.length.toLocaleString('pt-BR')} produto(s).`;
+            tbody.innerHTML = shown.map(g => `
+                <tr>
+                    <td><b>${g.c}</b></td>
+                    <td>${g.d || '—'}</td>
+                    <td class="num">${fmtNum(g.w[1])}</td>
+                    <td class="num">${fmtNum(g.w[2])}</td>
+                    <td class="num">${fmtNum(g.w[3])}</td>
+                    <td class="num"><b>${fmtNum(g.total)}</b></td>
+                </tr>`).join('');
+        }
+
+        function fmtNum(n) {
+            const v = parseFloat(n) || 0;
+            return v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+        }
+
+        // ---- IMPORTAÇÃO DA PLANILHA ----
+        function stkHandleFile(ev) {
+            const file = ev.target.files[0];
+            if (!file) return;
+            const meta = document.getElementById('stk-meta');
+            meta.innerHTML = '<div><b>⏳ Lendo planilha...</b></div>';
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    // Lê como matriz (linhas/colunas), cabeçalho na linha 3 → dados a partir da linha 4
+                    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+                    const out = [];
+                    for (let i = 3; i < rows.length; i++) {       // índice 3 = linha 4 (1-based)
+                        const row = rows[i];
+                        if (!row) continue;
+                        const cod = (row[1] != null ? String(row[1]).trim() : '');   // B
+                        const arm = (row[3] != null ? String(row[3]).trim() : '');   // D
+                        const desc = (row[4] != null ? String(row[4]).trim() : '');  // E
+                        const saldo = row[5];                                        // F
+                        if (!cod) continue;                       // ignora linhas sem código
+                        if (!STK_ARMAZENS[arm]) continue;         // só armazéns 1, 2, 3
+                        out.push({ c: cod, d: desc, a: arm, s: (parseFloat(saldo) || 0) });
+                    }
+
+                    if (out.length === 0) {
+                        alert('Nenhum item válido encontrado (armazéns 1, 2 ou 3) a partir da linha 4. Verifique se o arquivo está no formato esperado.');
+                        renderStkMeta();
+                        ev.target.value = '';
+                        return;
+                    }
+
+                    const novaMeta = {
+                        arquivo: file.name,
+                        dataHora: new Date().toLocaleString('pt-BR'),
+                        total: out.length
+                    };
+
+                    meta.innerHTML = '<div><b>☁️ Salvando ' + out.length.toLocaleString('pt-BR') + ' itens...</b></div>';
+                    // Substitui TODO o estoque anterior
+                    await db.ref('estoque/dados').set(out);
+                    await db.ref('estoque/meta').set(novaMeta);
+
+                    stkData = out;
+                    stkMeta = novaMeta;
+                    buildStkGrouped();
+                    renderStkMeta();
+                    document.getElementById('stk-search').value = '';
+                    document.getElementById('stk-search-result').innerHTML = '';
+                    renderStkTable(stkGrouped);
+                } catch (err) {
+                    console.error(err);
+                    alert('Erro ao ler a planilha: ' + err.message);
+                    renderStkMeta();
+                }
+                ev.target.value = '';   // permite reimportar o mesmo arquivo
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // ---- PESQUISA INTELIGENTE (instantânea, em memória) ----
+        function stkSearch(val) {
+            clearTimeout(stkSearchTimer);
+            stkSearchTimer = setTimeout(() => stkDoSearch(val), 120);
+        }
+
+        function stkDoSearch(val) {
+            const q = (val || '').trim().toUpperCase();
+            const resultEl = document.getElementById('stk-search-result');
+            if (q.length < 2) {
+                resultEl.innerHTML = '';
+                renderStkTable(stkGrouped);
+                return;
+            }
+            // Filtra direto na lista agrupada (1 produto = 1 item)
+            const list = stkGrouped.filter(g =>
+                g.c.toUpperCase().includes(q) || (g.d || '').toUpperCase().includes(q));
+
+            // Card de destaque (saldo total + por armazém) só quando a busca é bem específica
+            if (list.length > 0 && list.length <= 6) {
+                resultEl.innerHTML = list.map(g => `
+                    <div class="stk-result-card">
+                        <div class="rc-code">${g.c}</div>
+                        <div class="rc-desc">${g.d || '—'}</div>
+                        <div class="stk-wh-grid">
+                            <div class="stk-wh total"><div class="wh-name">SALDO TOTAL</div><div class="wh-val">${fmtNum(g.total)}</div></div>
+                            ${['1','2','3'].map(a => `
+                                <div class="stk-wh"><div class="wh-name">${STK_ARMAZENS[a]}</div><div class="wh-val">${fmtNum(g.w[a] || 0)}</div></div>
+                            `).join('')}
+                        </div>
+                    </div>`).join('');
+            } else {
+                resultEl.innerHTML = '';
+            }
+            renderStkTable(list);
+        }
+
+        // Placeholder para módulos ainda não desenvolvidos
+        function moduleSoon(nome) {
+            alert('O módulo "' + nome + '" está em desenvolvimento e estará disponível em breve.');
+        }
+
+        // Splash: após ~2,5s, faz fade e avança para a tela de produtos
+        function initSplash() {
+            const splash = document.getElementById('scr-splash');
+            if (!splash) return;
+            setTimeout(() => {
+                splash.classList.add('fade-out');
+                setTimeout(() => {
+                    splash.classList.remove('active', 'fade-out');
+                    show('scr-modules');
+                }, 600); // tempo do fade-out
+            }, 2500);
+        }
+        window.addEventListener('load', initSplash);
+
+        // ========== GESTÃO DE PRODUTOS ==========
+        let products = [];
+
+        const LEGACY_PRODUCT = {
+            id: 'express',
+            name: "EXPRESS",
+            img: "https://i.postimg.cc/5ND8bbnz/image-removebg-preview-(2).png",
+            legacy: true
+        };
+
+        // Carrega produtos do Firebase. Se o nó estiver vazio, sobe o produto legado.
+        async function loadProducts() {
+            const snap = await db.ref('produtos').once('value');
+            const data = snap.val() || {};
+
+            // Usa as CHAVES como id (o nó pode existir só com "estruturas" e sem os
+            // campos de identidade — ex.: estrutura cadastrada no EXPRESS antes de
+            // qualquer gravação de nome/imagem). Sem isso o produto ficava sem id/nome.
+            products = Object.keys(data).map(key => {
+                const obj = data[key] || {};
+                return Object.assign({}, obj, { id: obj.id || key });
+            });
+
+            // Se não existe nenhum produto no Firebase, persiste o legado
+            if (products.length === 0) {
+                await db.ref('produtos/' + LEGACY_PRODUCT.id).set(LEGACY_PRODUCT);
+                products = [{ ...LEGACY_PRODUCT }];
+            }
+
+            // Garante a IDENTIDADE do legado express SEM apagar suas estruturas.
+            // (update só mexe nos campos informados; nunca remove /estruturas)
+            let legacy = products.find(p => p.id === 'express');
+            if (!legacy) {
+                await db.ref('produtos/express').update({
+                    id: 'express', name: LEGACY_PRODUCT.name, img: LEGACY_PRODUCT.img, legacy: true
+                });
+                legacy = { ...LEGACY_PRODUCT };
+                products.unshift(legacy);
+            } else {
+                // Restaura, em memória e no banco, os campos que possam estar faltando
+                if (!legacy.name || !legacy.img || legacy.legacy !== true) {
+                    legacy.name = legacy.name || LEGACY_PRODUCT.name;
+                    legacy.img  = legacy.img  || LEGACY_PRODUCT.img;
+                    legacy.legacy = true;
+                    await db.ref('produtos/express').update({
+                        id: 'express', name: legacy.name, img: legacy.img, legacy: true
+                    });
+                }
+            }
+
+            // Sanitiza qualquer produto sem nome/imagem para não quebrar a renderização/ordenação
+            products.forEach(p => {
+                if (!p.name) p.name = '(sem nome)';
+                if (!p.img)  p.img  = LEGACY_PRODUCT.img;
+            });
+
+            // Ordena: legado primeiro, depois por nome (defensivo contra name ausente)
+            products.sort((a, b) => {
+                if (a.legacy && !b.legacy) return -1;
+                if (!a.legacy && b.legacy) return 1;
+                return String(a.name || '').localeCompare(String(b.name || ''));
+            });
+        }
+
+        // Um produto "tem estrutura" se houver ao menos uma unidade com linhas preenchidas
+        function hasEstrutura(p) {
+            if (!p || !p.estruturas) return false;
+            const estr = normalizeStructures(p.estruturas);
+            return Object.values(estr).some(rows =>
+                Array.isArray(rows) && rows.some(r => r && (r.posto || r.ativ || r.cod || r.desc || r.qtd || r.un)));
+        }
+
+        function renderProducts() {
+            const grid = document.getElementById('products-grid');
+            grid.innerHTML = products.map((p, i) => `
+                <div style="
+                    position:relative; background:#fff; border-radius:20px; width:220px; padding:30px 20px 20px;
+                    box-shadow:0 4px 18px rgba(0,0,0,0.07);
+                    border:2px solid transparent; transition:0.2s; text-align:center;
+                    display:flex; flex-direction:column; align-items:center; gap:16px;
+                "
+                    onmouseover="this.style.borderColor='var(--primary)'; this.style.transform='translateY(-3px)'"
+                    onmouseout="this.style.borderColor='transparent'; this.style.transform='none'">
+
+                    <!-- Menu de opes -->
+                    <div style="position:absolute; top:12px; right:12px; z-index:10;">
+                        <button onclick="event.stopPropagation(); toggleProdMenu(${i})" style="
+                            background:none; border:none; color:#bbb; font-size:18px; font-weight:700;
+                            cursor:pointer; padding:4px 8px; line-height:1; border-radius:6px;
+                        " title="Opções">&#8942;</button>
+                        <div id="prod-menu-${i}" style="
+                            display:none; position:absolute; right:0; top:28px; background:#fff;
+                            border:1px solid #eee; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.12);
+                            min-width:160px; z-index:20;
+                        ">
+                            <div onclick="event.stopPropagation(); editProduct(${i})" style="
+                                padding:12px 16px; font-size:13px; color:var(--dark); cursor:pointer;
+                                display:flex; align-items:center; gap:8px; border-radius:10px;
+                                font-weight:600; border-bottom:1px solid #f2f2f2;
+                            " onmouseover="this.style.background='#f0fbfc'" onmouseout="this.style.background='none'">
+                                ✏️ Editar Produto
+                            </div>
+                            <div onclick="event.stopPropagation(); confirmDeleteProduct(${i})" style="
+                                padding:12px 16px; font-size:13px; color:#e53935; cursor:pointer;
+                                display:flex; align-items:center; gap:8px; border-radius:10px;
+                                font-weight:600;
+                            " onmouseover="this.style.background='#fff5f5'" onmouseout="this.style.background='none'">
+                                🗑️ Excluir Produto
+                            </div>
+                        </div>
+                    </div>
+
+                    <div onclick="selectProduct(${i})" style="cursor:pointer; width:100%; display:flex; flex-direction:column; align-items:center; gap:16px;">
+                        <img src="${p.img}" style="height:120px; object-fit:contain;">
+                        <div style="font-weight:800; font-size:13px; color:var(--dark); letter-spacing:0.5px; line-height:1.4;">${p.name}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Fecha menus ao clicar fora
+            document.addEventListener('click', closeProdMenus, { once: true });
+        }
+
+        function toggleProdMenu(i) {
+            const menu = document.getElementById('prod-menu-' + i);
+            const isOpen = menu.style.display === 'block';
+            closeProdMenus();
+            if (!isOpen) {
+                menu.style.display = 'block';
+                // Registra listener para fechar ao clicar fora
+                setTimeout(() => document.addEventListener('click', closeProdMenus, { once: true }), 10);
+            }
+        }
+
+        function closeProdMenus() {
+            document.querySelectorAll('[id^="prod-menu-"]').forEach(m => m.style.display = 'none');
+        }
+
+        function confirmDeleteProduct(i) {
+            closeProdMenus();
+            const p = products[i];
+            document.getElementById('confirm-delete-name').textContent = p.name;
+            document.getElementById('confirm-delete-idx').value = i;
+            document.getElementById('modal-confirm-delete').classList.add('open');
+        }
+
+        async function executeDeleteProduct() {
+            const i = parseInt(document.getElementById('confirm-delete-idx').value);
+            const p = products[i];
+            if(!p) return;
+
+            // Remove do Firebase (todos os produtos ficam no Firebase agora)
+            if(p.id) {
+                await db.ref('produtos/' + p.id).remove();
+            }
+
+            document.getElementById('modal-confirm-delete').classList.remove('open');
+            await loadProducts();
+            renderProducts();
+        }
+
+        async function selectProduct(idx) {
+            const p = products[idx];
+            if (!p) { console.warn('selectProduct: produto inexistente no índice', idx); return; }
+            currentProduct = p;
+
+            if(p.legacy) {
+                // Produto EXPRESS original: usa dados hardcoded (sem EAP por projeto)
+                dbM = LEGACY_DBM;
+                dbP = LEGACY_DBP;
+                tM  = LEGACY_TM;
+                tP  = LEGACY_TP;
+                currentEapByProj = {};
+            } else {
+                // Produto dinâmico: carrega do Firebase
+                const snap = await db.ref('produtos/' + p.id).once('value');
+                const data = snap.val() || {};
+                tM  = (data.eap  && data.eap.modulo)  ? data.eap.modulo  : [];
+                tP  = (data.eap  && data.eap.pod)     ? data.eap.pod     : [];
+                currentEapByProj = (data.eap && data.eap.byProj) ? data.eap.byProj : {};
+                dbM = (data.seq  && data.seq.modulo)  ? data.seq.modulo  : [];
+                dbP = (data.seq  && data.seq.pod)     ? data.seq.pod     : [];
+            }
+            show('scr-start');
+        }
+
+        // Resolve a lista de atividades de UMA unidade: usa a EAP específica do seu
+        // ID Projeto se existir; senão, cai na EAP padrão do tipo (não quebra o legado).
+        function getUnitTasks(type, idProj) {
+            const key = type + '_' + sanitizeKey(idProj || '');
+            if (currentEapByProj && currentEapByProj[key] && currentEapByProj[key].length) {
+                return currentEapByProj[key];
+            }
+            return type === 'MODULO' ? tM : tP;
+        }
+
+        let editingProductId = null; // null = criando; id = editando produto existente
+
+        function openNewProductModal() {
+            editingProductId = null;
+            // Inicializa buffers vazios para novo produto
+            modalEap = { modulo: [{p:'', a:'', d:false, c:true}], pod: [{p:'', a:'', d:false, c:true}], byProj: {} };
+            modalSeq = { modulo: [['','','']], pod: [['','','']] };
+            document.getElementById('modal-new-product').classList.add('open');
+            document.getElementById('new-prod-name').value = '';
+            document.getElementById('new-prod-img').value = '';
+            document.getElementById('modal-prod-title').textContent = '+ Novo Produto';
+            document.getElementById('eap-proj-picker').style.display = 'none';
+            switchProdTab('tab-info');
+            currentEapScope = 'modulo';
+            rebuildEapSelector('modulo');
+            renderSeqTable('modulo');
+            renderSeqTable('pod');
+            setTimeout(() => document.getElementById('new-prod-name').focus(), 100);
+        }
+
+        // ---- EDITAR PRODUTO EXISTENTE ----
+        async function editProduct(i) {
+            closeProdMenus();
+            const p = products[i];
+            if (!p) return;
+            if (p.legacy) {
+                alert('O produto EXPRESS é o modelo base do sistema e não pode ter EAP/Sequência editadas por aqui. Você ainda pode cadastrar as Estruturas dele normalmente pela tela "Estrutura do Produto".');
+                return;
+            }
+
+            // Carrega dados atuais do Firebase
+            const snap = await db.ref('produtos/' + p.id).once('value');
+            const data = snap.val() || {};
+            editingProductId = p.id;
+
+            modalEap = {
+                modulo: (data.eap && data.eap.modulo) ? data.eap.modulo : [{p:'', a:'', d:false, c:true}],
+                pod:    (data.eap && data.eap.pod)    ? data.eap.pod    : [{p:'', a:'', d:false, c:true}],
+                byProj: (data.eap && data.eap.byProj) ? data.eap.byProj : {}
+            };
+            modalSeq = {
+                modulo: (data.seq && data.seq.modulo) ? data.seq.modulo : [['','','']],
+                pod:    (data.seq && data.seq.pod)    ? data.seq.pod    : [['','','']]
+            };
+
+            document.getElementById('modal-new-product').classList.add('open');
+            document.getElementById('new-prod-name').value = data.name || p.name || '';
+            document.getElementById('new-prod-img').value = data.img || p.img || '';
+            document.getElementById('modal-prod-title').textContent = '✏️ Editar Produto';
+            document.getElementById('eap-proj-picker').style.display = 'none';
+            switchProdTab('tab-eap');           // abre direto na aba EAP, conforme pedido
+            currentEapScope = 'modulo';
+            rebuildEapSelector('modulo');
+            renderSeqTable('modulo');
+            renderSeqTable('pod');
+        }
+
+        function closeNewProductModal(e, force) {
+            if(force || (e && e.target === document.getElementById('modal-new-product'))) {
+                document.getElementById('modal-new-product').classList.remove('open');
+            }
+        }
+
+        // ---- TAB SWITCHING ----
+        function switchProdTab(tabId) {
+            document.querySelectorAll('.prod-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.prod-tab-content').forEach(c => c.style.display = 'none');
+            document.querySelector(`.prod-tab[data-tab="${tabId}"]`).classList.add('active');
+            document.getElementById(tabId).style.display = 'block';
+        }
+
+        // ---- RENDERIZAÇÃO DAS TABELAS EAP (por escopo) ----
+        // Escopo: 'modulo' | 'pod' (padrão/fallback) ou 'MODULO_<idProj>' / 'POD_<idProj>' (por projeto)
+        let currentEapScope = 'modulo';
+
+        function eapScopeArr(scope) {
+            if (scope === 'modulo') return modalEap.modulo;
+            if (scope === 'pod') return modalEap.pod;
+            if (!modalEap.byProj) modalEap.byProj = {};
+            if (!modalEap.byProj[scope]) modalEap.byProj[scope] = [];
+            return modalEap.byProj[scope];
+        }
+
+        function eapScopeLabel(scope) {
+            if (scope === 'modulo') return '🏗️ Módulo (padrão)';
+            if (scope === 'pod') return '🚿 POD (padrão)';
+            const isMod = scope.startsWith('MODULO_');
+            const proj = scope.replace(/^MODULO_|^POD_/, '');
+            return (isMod ? '🏗️ Módulo' : '🚿 POD') + ' · Projeto ' + proj;
+        }
+
+        // Recria as opções do seletor de EAP a partir do estado atual
+        function rebuildEapSelector(selectScope) {
+            const sel = document.getElementById('eap-selector');
+            if (!sel) return;
+            const opts = ['modulo', 'pod'];
+            if (modalEap.byProj) Object.keys(modalEap.byProj).forEach(k => opts.push(k));
+            sel.innerHTML = opts.map(s => `<option value="${s}">${eapScopeLabel(s)}</option>`).join('');
+            const target = selectScope && opts.includes(selectScope) ? selectScope : currentEapScope;
+            sel.value = opts.includes(target) ? target : 'modulo';
+            renderEapScope(sel.value);
+        }
+
+        function renderEapScope(scope) {
+            currentEapScope = scope;
+            const rows = eapScopeArr(scope);
+            const isProj = scope !== 'modulo' && scope !== 'pod';
+            document.getElementById('eap-remove-btn').style.display = isProj ? 'inline-block' : 'none';
+
+            document.getElementById('eap-table-area').innerHTML = `
+                <div class="sheet-wrapper">
+                    <table class="sheet-table">
+                        <thead><tr>
+                            <th style="width:35%">Posto</th>
+                            <th>Atividade</th>
+                            <th style="width:70px; text-align:center">Tem Data</th>
+                            <th style="width:70px; text-align:center">Tem Check</th>
+                            <th class="col-del"></th>
+                        </tr></thead>
+                        <tbody id="eap-tbody">
+                            ${rows.map((r, i) => eapRowHTML(i, r)).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+
+            // Handler de colar do Excel (Posto / Atividade)
+            const tbody = document.getElementById('eap-tbody');
+            if (tbody) tbody.addEventListener('paste', eapHandlePaste);
+        }
+
+        function eapRowHTML(i, r) {
+            return `<tr id="eap-row-${i}">
+                <td><input type="text" data-col="p" value="${(r.p||'').replace(/"/g,'&quot;')}" oninput="eapUpdate(${i},'p',this.value)" placeholder="Ex: SL 01"></td>
+                <td><input type="text" data-col="a" value="${(r.a||'').replace(/"/g,'&quot;')}" oninput="eapUpdate(${i},'a',this.value)" placeholder="Ex: MONTAGEM"></td>
+                <td style="text-align:center"><input type="checkbox" ${r.d?'checked':''} onchange="eapUpdate(${i},'d',this.checked)"></td>
+                <td style="text-align:center"><input type="checkbox" ${r.c?'checked':''} onchange="eapUpdate(${i},'c',this.checked)"></td>
+                <td class="col-del"><button class="btn-del" onclick="removeEapRow(${i})">✕</button></td>
+            </tr>`;
+        }
+
+        function eapUpdate(i, field, val) {
+            eapScopeArr(currentEapScope)[i][field] = val;
+        }
+
+        function addEapRow(scope) {
+            eapScopeArr(scope).push({p:'', a:'', d:false, c:true});
+            renderEapScope(scope);
+        }
+
+        function removeEapRow(i) {
+            const arr = eapScopeArr(currentEapScope);
+            arr.splice(i, 1);
+            if (arr.length === 0) arr.push({p:'', a:'', d:false, c:true});
+            renderEapScope(currentEapScope);
+        }
+
+        // Colar do Excel nas colunas Posto/Atividade a partir da célula focada
+        function eapHandlePaste(e) {
+            const text = (e.clipboardData || window.clipboardData).getData('text');
+            if (!text || (text.indexOf('\t') === -1 && text.indexOf('\n') === -1)) return; // 1 célula: deixa o browser
+            e.preventDefault();
+            const active = document.activeElement;
+            let startRow = 0, startCol = 0;
+            if (active && active.tagName === 'INPUT') {
+                const tr = active.closest('tr');
+                if (tr) startRow = parseInt(tr.id.replace('eap-row-', ''), 10) || 0;
+                startCol = active.dataset.col === 'a' ? 1 : 0;
+            }
+            const arr = eapScopeArr(currentEapScope);
+            const cols = ['p', 'a'];
+            const lines = text.replace(/\r/g, '').split('\n').filter((l, idx, a) => !(idx === a.length - 1 && l === ''));
+            lines.forEach((line, li) => {
+                const cells = line.split('\t');
+                const idx = startRow + li;
+                if (!arr[idx]) arr[idx] = {p:'', a:'', d:false, c:true};
+                cells.forEach((c, ci) => {
+                    const target = startCol + ci;
+                    if (target < cols.length) arr[idx][cols[target]] = c.trim();
+                });
+            });
+            renderEapScope(currentEapScope);
+        }
+
+        // ---- VINCULAR EAP A UM ID PROJETO ----
+        function eapProjList() {
+            // IDs de projeto da Sequência, com tipo, ainda SEM EAP específica
+            const out = [];
+            const seen = new Set();
+            const add = (rows, type) => (rows || []).forEach(u => {
+                const id = (u[0] || '').trim();
+                if (!id) return;
+                const key = type + '_' + sanitizeKey(id);
+                if (seen.has(key)) return;
+                seen.add(key);
+                const exists = modalEap.byProj && modalEap.byProj[key];
+                out.push({ id, type, key, exists: !!exists });
+            });
+            add(modalSeq.modulo, 'MODULO');
+            add(modalSeq.pod, 'POD');
+            return out;
+        }
+
+        function openAddProjEap() {
+            const picker = document.getElementById('eap-proj-picker');
+            const sel = document.getElementById('eap-proj-select');
+            const empty = document.getElementById('eap-proj-empty');
+            const avail = eapProjList().filter(p => !p.exists);
+            if (avail.length === 0) {
+                picker.style.display = 'block';
+                sel.style.display = 'none';
+                empty.style.display = 'block';
+                empty.textContent = eapProjList().length === 0
+                    ? 'Cadastre a Lista de Sequência primeiro — os IDs de Projeto vêm de lá.'
+                    : 'Todos os IDs de Projeto da Sequência já possuem EAP específica.';
+                return;
+            }
+            sel.style.display = '';
+            empty.style.display = 'none';
+            sel.innerHTML = avail.map(p =>
+                `<option value="${p.key}">${p.type === 'MODULO' ? '🏗️ Módulo' : '🚿 POD'} · ${p.id}</option>`).join('');
+            picker.style.display = 'block';
+        }
+
+        function cancelAddProjEap() {
+            document.getElementById('eap-proj-picker').style.display = 'none';
+        }
+
+        function confirmAddProjEap() {
+            const key = document.getElementById('eap-proj-select').value;
+            if (!key) return;
+            if (!modalEap.byProj) modalEap.byProj = {};
+            if (!modalEap.byProj[key]) {
+                // Começa como CÓPIA da EAP padrão do mesmo tipo (ponto de partida editável)
+                const base = key.startsWith('MODULO_') ? modalEap.modulo : modalEap.pod;
+                modalEap.byProj[key] = JSON.parse(JSON.stringify(base && base.length ? base : [{p:'', a:'', d:false, c:true}]));
+            }
+            document.getElementById('eap-proj-picker').style.display = 'none';
+            rebuildEapSelector(key);
+        }
+
+        function removeCurrentProjEap() {
+            if (currentEapScope === 'modulo' || currentEapScope === 'pod') return;
+            if (!confirm('Remover esta EAP por projeto? As unidades desse projeto voltarão a usar a EAP padrão.')) return;
+            if (modalEap.byProj) delete modalEap.byProj[currentEapScope];
+            rebuildEapSelector('modulo');
+        }
+
+        function switchSeqSub(subId) {
+            document.querySelectorAll('.seq-sub-tab').forEach(t => { t.style.background = '#aaa'; t.classList.remove('active'); });
+            document.querySelectorAll('.seq-sub-content').forEach(c => c.style.display = 'none');
+            document.querySelector(`.seq-sub-tab[data-sub="${subId}"]`).style.background = 'var(--dark)';
+            document.getElementById(subId).style.display = 'block';
+        }
+
+        function renderSeqTable(tipo) {
+            const rows = modalSeq[tipo];
+            const html = `
+                <div class="sheet-wrapper">
+                    <table class="sheet-table">
+                        <thead><tr>
+                            <th style="width:30%">ID Projeto</th>
+                            <th style="width:35%">Cód. Produto</th>
+                            <th>OP</th>
+                            <th class="col-del"></th>
+                        </tr></thead>
+                        <tbody id="seq-tbody-${tipo}">
+                            ${rows.map((r,i) => seqRowHTML(tipo, i, r)).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+            document.getElementById(`seq-${tipo}-table`).innerHTML = html;
+        }
+
+        function seqRowHTML(tipo, i, r) {
+            return `<tr id="seq-row-${tipo}-${i}">
+                <td><input type="text" value="${(r[0]||'').replace(/"/g,'&quot;')}" oninput="seqUpdate('${tipo}',${i},0,this.value)" placeholder="Ex: 7.00.SGC001"></td>
+                <td><input type="text" value="${(r[1]||'').replace(/"/g,'&quot;')}" oninput="seqUpdate('${tipo}',${i},1,this.value)" placeholder="Ex: EXPRESS 291"></td>
+                <td><input type="text" value="${(r[2]||'').replace(/"/g,'&quot;')}" oninput="seqUpdate('${tipo}',${i},2,this.value)" placeholder="Ex: 006307"></td>
+                <td class="col-del"><button class="btn-del" onclick="removeSeqRow('${tipo}',${i})">✕</button></td>
+            </tr>`;
+        }
+
+        function seqUpdate(tipo, i, col, val) {
+            modalSeq[tipo][i][col] = val;
+        }
+
+        function addSeqRow(tipo) {
+            modalSeq[tipo].push(['','','']);
+            renderSeqTable(tipo);
+        }
+
+        function removeSeqRow(tipo, i) {
+            modalSeq[tipo].splice(i, 1);
+            renderSeqTable(tipo);
+        }
+
+        // ---- SALVAR NOVO PRODUTO ----
+        async function addNewProduct() {
+            // Coleta valores atuais dos inputs (os que ainda estão no DOM)
+            syncModalBuffersFromDOM();
+
+            const name = document.getElementById('new-prod-name').value.trim().toUpperCase();
+            const img  = document.getElementById('new-prod-img').value.trim();
+            if(!name) { alert('Informe o nome do produto.'); switchProdTab('tab-info'); return; }
+            if(!img)  { alert('Informe o link da imagem.'); switchProdTab('tab-info'); return; }
+
+            // Se estiver editando, mantém o MESMO id; senão cria um novo
+            const id = editingProductId || ('prod_' + Date.now());
+
+            // Monta byProj só com EAPs que tenham ao menos uma linha preenchida
+            const byProjClean = {};
+            if (modalEap.byProj) {
+                Object.keys(modalEap.byProj).forEach(k => {
+                    const rows = (modalEap.byProj[k] || []).filter(r => (r.p || r.a));
+                    if (rows.length) byProjClean[k] = rows;
+                });
+            }
+
+            // Atualiza apenas os campos do produto SEM apagar o nó "estruturas"
+            // (usar update em vez de set, e não tocar em /estruturas)
+            const eapData = { modulo: modalEap.modulo, pod: modalEap.pod };
+            // Firebase remove chaves com objeto vazio; só inclui byProj se houver conteúdo
+            eapData.byProj = Object.keys(byProjClean).length ? byProjClean : null;
+
+            const prodData = {
+                id, name, img,
+                eap: eapData,
+                seq: { modulo: modalSeq.modulo, pod: modalSeq.pod }
+            };
+            await db.ref('produtos/' + id).update(prodData);
+
+            editingProductId = null;
+            // Recarrega lista do Firebase para manter consistência
+            await loadProducts();
+            closeNewProductModal(null, true);
+            renderProducts();
+        }
+
+        // Lê os inputs do DOM e sincroniza nos buffers antes de salvar.
+        // A EAP é mantida em tempo real via oninput (inclui byProj), então aqui
+        // só reforçamos a Lista de Sequência por segurança.
+        function syncModalBuffersFromDOM() {
+            ['modulo','pod'].forEach(tipo => {
+                const stbody = document.getElementById(`seq-tbody-${tipo}`);
+                if(!stbody) return;
+                modalSeq[tipo].forEach((r, i) => {
+                    const row = document.getElementById(`seq-row-${tipo}-${i}`);
+                    if(!row) return;
+                    const inputs = row.querySelectorAll('input[type="text"]');
+                    if(inputs[0]) r[0] = inputs[0].value;
+                    if(inputs[1]) r[1] = inputs[1].value;
+                    if(inputs[2]) r[2] = inputs[2].value;
+                });
+            });
+        }
+
+        // Calcula o prefixo de path do produto atual
+        function getProdPrefix() {
+            return (currentProduct && !currentProduct.legacy) ? currentProduct.id + '_' : '';
+        }
+
+        // CARREGAR LISTA DE UNIDADES
+        async function loadList(type) {
+            currentListType = type;
+            const body = document.getElementById('body-units');
+            body.innerHTML = "<tr><td colspan='5' style='text-align:center'>Sincronizando dados...</td></tr>";
+            const data  = (type === 'MODULO') ? dbM : dbP;
+            const prodName = currentProduct ? currentProduct.name : '';
+            document.getElementById('list-title').innerText = type === 'MODULO'
+                ? `Módulos${prodName ? ' — ' + prodName : ''}`
+                : `Pods${prodName ? ' — ' + prodName : ''}`;
+
+            if(!data || data.length === 0) {
+                body.innerHTML = "<tr><td colspan='5' style='text-align:center; color:#aaa; padding:30px;'>Nenhuma unidade cadastrada para este produto.</td></tr>";
+                show('scr-list');
+                return;
+            }
+
+            const prefix = getProdPrefix();
+            const snapshot = await db.ref('conferencias').once('value');
+            const allSaved = snapshot.val() || {};
+
+            body.innerHTML = "";
+            data.forEach(u => {
+                // Cada unidade usa a EAP do seu ID Projeto (ou a padrão)
+                const tasks = getUnitTasks(type, u[0]);
+                const checkTaskIndices = tasks.reduce((acc, t, i) => { if(t.c) acc.push(i); return acc; }, []);
+
+                const path  = prefix + type + "_" + u[1].replace(/\./g, '_');
+                const saved = allSaved[path] || {};
+
+                // Percentual baseado nos checkboxes
+                let done = 0, lastTask = "A iniciar";
+                checkTaskIndices.forEach(i => {
+                    if(saved['c_'+i]) {
+                        done++;
+                        lastTask = `<b>${tasks[i].p}</b> ${tasks[i].a}`;
+                    }
+                });
+                const total = checkTaskIndices.length;
+                const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+
+                // Bolinha: verde = data de carga salva, amarelo = 100% sem data, vermelho = resto
+                let loadDateKey;
+                if (currentProduct && currentProduct.legacy) {
+                    loadDateKey = type === 'MODULO' ? 'd_63' : 'd_999'; // EXPRESS: comportamento original
+                } else {
+                    // Produtos novos: a "data de carga" é a última atividade com data na EAP da unidade
+                    let lastDateIdx = -1;
+                    tasks.forEach((t, i) => { if (t.d) lastDateIdx = i; });
+                    loadDateKey = lastDateIdx >= 0 ? 'd_' + lastDateIdx : null;
+                }
+                let dotClass = 'dot-red';
+                if (loadDateKey && saved[loadDateKey]) {
+                    dotClass = 'dot-green';
+                } else if (pct === 100) {
+                    dotClass = 'dot-yellow';
+                }
+
+                body.innerHTML += `<tr>
+                    <td><span class="status-dot ${dotClass}"></span><b>${u[0]}</b></td>
+                    <td>${u[1]}</td>
+                    <td>${u[2]}</td>
+                    <td class="status-cell"><span class="pct-badge">${pct}%</span><br><small>${lastTask}</small></td>
+                    <td><button onclick="openCheck('${u[0]}','${u[1]}','${u[2]}','${type}')">Conferir</button></td>
+                </tr>`;
+            });
+            show('scr-list');
+        }
+
+        async function openCheck(id, exp, op, type) {
+            cur = { id, exp, op, type, path: getProdPrefix() + type + "_" + exp.replace(/\./g, '_') };
+            document.getElementById('info-header').innerHTML = `<div>PROJETO<br><b>${id}</b></div><div>EXPRESS<br><b>${exp}</b></div><div>OP<br><b>${op}</b></div>`;
+            
+            db.ref('conferencias/' + cur.path).off();
+            db.ref('conferencias/' + cur.path).on('value', (snapshot) => {
+                const saved = snapshot.val() || {};
+                updateUIFields(saved);
+            });
+
+            const cont = document.getElementById('items-container');
+            cont.innerHTML = "";
+            const tasks = getUnitTasks(type, id);
+
+            tasks.forEach((t, i) => {
+                cont.innerHTML += `<div class="check-row">
+                    <div class="c-posto ${t.t?'lp-style':''}">${t.p}</div>
+                    <div class="c-ativid">${t.a}</div>
+                    <div class="c-input">${t.d ? `<input type="date" class="d-in" id="d_${i}" data-idx="${i}" onchange="saveSingleField('d_'+${i}, this.value)">` : ''}</div>
+                    <div class="c-input">${t.c ? `<input type="checkbox" class="c-in" id="c_${i}" data-idx="${i}" onclick="saveSingleField('c_'+${i}, this.checked)">` : ''}</div>
+                </div>`;
+            });
+            show('scr-check');
+        }
+
+        function updateUIFields(saved) {
+            if(saved.obs !== undefined) document.getElementById('obs-main').value = saved.obs;
+            document.querySelectorAll('.d-in').forEach(el => {
+                if(saved['d_'+el.dataset.idx] !== undefined) el.value = saved['d_'+el.dataset.idx];
+            });
+            document.querySelectorAll('.c-in').forEach(el => {
+                if(saved['c_'+el.dataset.idx] !== undefined) el.checked = saved['c_'+el.dataset.idx];
+            });
+            updateUI();
+        }
+
+        function saveSingleField(fieldKey, value) {
+            if(!cur.path) return;
+            setSyncStatus(false);
+            
+            let update = {};
+            update[fieldKey] = value;
+            update['lastUpdate'] = Date.now();
+
+            db.ref('conferencias/' + cur.path).update(update).then(() => {
+                setSyncStatus(true);
+            }).catch(() => {
+                setSyncStatus(false);
+            });
+            updateUI();
+        }
+
+        function setSyncStatus(isSynced) {
+            const el = document.getElementById('sync-status');
+            if(isSynced) {
+                el.innerText = "☁️ Sincronizado";
+                el.className = "status-sync";
+            } else {
+                el.innerText = "⏳ Salvando...";
+                el.className = "status-saving";
+            }
+        }
+
+        function updateUI() {
+            const t = document.querySelectorAll('.c-in').length;
+            const d = document.querySelectorAll('.c-in:checked').length;
+            const p = Math.round((d/t)*100) || 0;
+            const bar = document.getElementById('bar-fill');
+            if(bar) bar.style.width = p + "%";
+            const txt = document.getElementById('pct-txt');
+            if(txt) txt.innerText = p + "%";
+        }
+
+        function exitCheck() {
+            if(cur.path) db.ref('conferencias/' + cur.path).off();
+            loadList(cur.type);
+        }
+
+        function doPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setFillColor(26, 28, 30);
+            doc.rect(0, 0, 210, 25, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text("BRASIL AO CUBO - SGC", 14, 16);
+            doc.setTextColor(40, 40, 40);
+            doc.setFontSize(10);
+            doc.text(`Unidade: ${cur.exp} | OP: ${cur.op} | Projeto: ${cur.id}`, 14, 35);
+
+            const rows = [];
+            document.querySelectorAll('.check-row').forEach(r => {
+                const ck = r.querySelector('.c-in');
+                rows.push([
+                    r.querySelector('.c-posto').innerText, 
+                    r.querySelector('.c-ativid').innerText, 
+                    r.querySelector('.d-in')?.value || "", 
+                    ck ? (ck.checked ? "OK" : "") : ""
+                ]);
+            });
+
+            doc.autoTable({ 
+                startY: 45,
+                head: [['Posto', 'Atividade', 'Data', 'Status']], 
+                body: rows,
+                theme: 'grid',
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: [240, 240, 240], textColor: 20 }
+            });
+
+            const finalY = doc.lastAutoTable.finalY || 50;
+            const obs = document.getElementById('obs-main').value || "Nenhuma pendência.";
+            doc.setFont(undefined, 'bold');
+            doc.text("OBSERVAÇÕES:", 14, finalY + 12);
+            doc.setFont(undefined, 'normal');
+            doc.text(doc.splitTextToSize(obs, 180), 14, finalY + 18);
+            doc.save(`SGC_${cur.exp}.pdf`);
+        }
+
+        function doExcel() {
+            let rowData = [cur.id, cur.exp, cur.op];
+            document.querySelectorAll('.check-row').forEach(r => {
+                const dateInput = r.querySelector('.c-input input[type="date"]');
+                const checkInput = r.querySelector('.c-input input[type="checkbox"]');
+                if (dateInput) {
+                    let val = dateInput.value;
+                    if(val) {
+                        const [y, m, d] = val.split('-');
+                        rowData.push(`${d}/${m}/${y}`);
+                    } else { rowData.push(""); }
+                }
+                if (checkInput) { 
+                    rowData.push(checkInput.checked ? "=VERDADEIRO" : "=FALSO"); 
+                }
+            });
+            const ws = XLSX.utils.aoa_to_sheet([rowData]);
+            const wb = XLSX.utils.book_new(); 
+            XLSX.utils.book_append_sheet(wb, ws, "SGC_Export");
+            XLSX.writeFile(wb, `SGC_${cur.exp}_Dados.xlsx`);
+        }
+
+        // ========== PESQUISA DE ATIVIDADES ==========
+
+        // Monta lista única de todas as atividades (EAP padrão + EAPs por projeto) para autocomplete
+        function getAllActivities() {
+            const set = new Set();
+            [...tM, ...tP].forEach(t => { if(t.c) set.add((t.a||'').trim().toUpperCase()); });
+            Object.values(currentEapByProj || {}).forEach(list =>
+                (list || []).forEach(t => { if(t.c) set.add((t.a||'').trim().toUpperCase()); }));
+            set.delete('');
+            return [...set].sort();
+        }
+
+        function openSearchModal() {
+            document.getElementById('modal-search').classList.add('open');
+            document.getElementById('search-activity-input').value = '';
+            document.getElementById('search-suggestions').style.display = 'none';
+            document.getElementById('search-suggestions').innerHTML = '';
+            document.getElementById('search-results-area').innerHTML = '';
+            setTimeout(() => document.getElementById('search-activity-input').focus(), 100);
+        }
+
+        function closeSearchModal(e, force) {
+            if(force || (e && e.target === document.getElementById('modal-search'))) {
+                document.getElementById('modal-search').classList.remove('open');
+            }
+        }
+
+        function onSearchInput(val) {
+            const query = val.trim().toUpperCase();
+            const sugBox = document.getElementById('search-suggestions');
+            const resultsArea = document.getElementById('search-results-area');
+
+            if(query.length < 2) {
+                sugBox.style.display = 'none';
+                sugBox.innerHTML = '';
+                resultsArea.innerHTML = '';
+                return;
+            }
+
+            const activities = getAllActivities();
+            const matches = activities.filter(a => a.includes(query));
+
+            if(matches.length === 0) {
+                sugBox.style.display = 'none';
+                sugBox.innerHTML = '';
+                resultsArea.innerHTML = '<div class="search-empty">Nenhuma atividade encontrada com esse nome.</div>';
+                return;
+            }
+
+            sugBox.style.display = 'block';
+            sugBox.innerHTML = matches.slice(0, 10).map(m => {
+                const highlighted = m.replace(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), `<mark>$&</mark>`);
+                return `<div class="suggestion-item" onclick="selectActivity('${m.replace(/'/g,"\\'")}')">
+                    ${highlighted}
+                </div>`;
+            }).join('');
+        }
+
+        async function selectActivity(activityName) {
+            const sugBox = document.getElementById('search-suggestions');
+            const resultsArea = document.getElementById('search-results-area');
+            const input = document.getElementById('search-activity-input');
+
+            input.value = activityName;
+            sugBox.style.display = 'none';
+            sugBox.innerHTML = '';
+
+            resultsArea.innerHTML = '<div class="search-loading">⏳ Buscando dados no Firebase...</div>';
+
+            // Carrega todos os dados do Firebase
+            const snapshot = await db.ref('conferencias').once('value');
+            const allSaved = snapshot.val() || {};
+
+            // Carrega estruturas do produto atual para anexar material + quantitativo
+            const structSnap = await db.ref('produtos/' + (currentProduct ? currentProduct.id : '') + '/estruturas').once('value');
+            const structures = normalizeStructures(structSnap.val());
+            // Materiais ligados a esta atividade, por UNIDADE física (chave = TYPE_cod)
+            const matsForUnit = (type, cod) => {
+                const rows = structures[type + '_' + sanitizeKey(cod)] || [];
+                return rows.filter(r => norm(r.ativ) === norm(activityName) && (r.cod || r.desc));
+            };
+
+            // Índices da atividade NA EAP DAQUELA unidade (suporta EAP por projeto)
+            const indicesFor = (type, idProj) => getUnitTasks(type, idProj)
+                .reduce((acc, t, i) => { if(t.c && (t.a||'').trim().toUpperCase() === activityName) acc.push(i); return acc; }, []);
+
+            let items = [];
+
+            // Verifica em MÓDULOS
+            dbM.forEach(u => {
+                const idxs = indicesFor('MODULO', u[0]);
+                if (idxs.length === 0) return; // atividade não existe na EAP desta unidade
+                const path = getProdPrefix() + 'MODULO_' + u[1].replace(/\./g, '_');
+                const saved = allSaved[path] || {};
+                const done = idxs.some(i => saved['c_'+i] === true);
+                items.push({ express: u[1], op: u[2], proj: u[0], type: 'MODULO', done, mats: matsForUnit('MODULO', u[1]) });
+            });
+
+            // Verifica em PODS
+            dbP.forEach(u => {
+                const idxs = indicesFor('POD', u[0]);
+                if (idxs.length === 0) return;
+                const path = getProdPrefix() + 'POD_' + u[1].replace(/\./g, '_');
+                const saved = allSaved[path] || {};
+                const done = idxs.some(i => saved['c_'+i] === true);
+                items.push({ express: u[1], op: u[2], proj: u[0], type: 'POD', done, mats: matsForUnit('POD', u[1]) });
+            });
+
+            if(items.length === 0) {
+                resultsArea.innerHTML = '<div class="search-empty">Esta atividade não existe nos dados cadastrados.</div>';
+                return;
+            }
+
+            const countDone = items.filter(x => x.done).length;
+            const countPend = items.length - countDone;
+
+            // Ordena: feitos primeiro, depois pendentes
+            items.sort((a, b) => (b.done ? 1 : 0) - (a.done ? 1 : 0));
+
+            const listHTML = items.map(item => `
+                <div class="search-result-item" style="flex-wrap:wrap;">
+                    <div class="result-dot ${item.done ? 'green' : 'red'}"></div>
+                    <div class="result-info">
+                        <div class="result-express">${item.express}</div>
+                        <div class="result-op">Proj: ${item.proj} &nbsp;|&nbsp; OP: ${item.op}</div>
+                    </div>
+                    <span class="result-type-badge ${item.type === 'MODULO' ? 'badge-modulo' : 'badge-pod'}">
+                        ${item.type === 'MODULO' ? '🏗️ Módulo' : '🚿 Pod'}
+                    </span>
+                    ${item.mats && item.mats.length ? `<div style="flex-basis:100%;margin-top:2px;">
+                        ${item.mats.map(m => `<div class="mat-line">
+                            📦 <b>${m.cod || ''}</b> ${m.desc || ''} — ${m.qtd || 0} ${m.un || ''}
+                            <span class="${item.done ? 'ok' : 'pend'}">${item.done ? '✓ consumido' : '● pendente'}</span>
+                        </div>`).join('')}
+                    </div>` : ''}
+                </div>
+            `).join('');
+
+            resultsArea.innerHTML = `
+                <div class="search-results-title">Resultado para: "${activityName}"</div>
+                <div class="search-stats">
+                    <span>Total: <b>${items.length}</b></span>
+                    <span class="stat-green">● Concluído: ${countDone}</span>
+                    <span class="stat-red">● Pendente: ${countPend}</span>
+                </div>
+                <div class="search-results-list">${listHTML}</div>
+            `;
+        }
+
+        // ============================================================
+        // ===== MÓDULO: ESTRUTURA DO PRODUTO & QUANTITATIVO ==========
+        // ============================================================
+        //
+        // Modelo de dados (Firebase):
+        //   produtos/{prodId}/estruturas/{unitKey} = [ { posto, ativ, cod, desc, qtd, un }, ... ]
+        //
+        //   unitKey = TYPE_codProduto  (ex: MODULO_EXPRESS_491) — a MESMA chave usada
+        //   no caminho de conferências (sem o prefixo do produto). Assim cada unidade
+        //   física (Cód. Produto) tem sua estrutura INDEPENDENTE, alinhada 1:1 com seus
+        //   checks. Estruturas de unidades diferentes nunca se afetam.
+        //
+        // Chave de consumo interna: (Posto + Atividade) normalizado, casado contra a EAP
+        // (tM para MÓDULO, tP para POD). "Consumido"/"pendente" são SEMPRE calculados na
+        // hora a partir do estado dos checks — nunca um saldo gravado que decrementa.
+
+        let estStructures = {};      // { unitKey: [linhas] } do produto atual (espelho do Firebase)
+        let estCurrentUnit = null;   // { type, cod, proj, op, key } da unidade em edição
+        let estSaveTimer = null;
+        const EST_IMG = 'https://i.postimg.cc/fT1v2DTk/image-removebg-preview-(6).png';
+
+        function sanitizeKey(s) {
+            return String(s || '').replace(/[.#$/\[\]]/g, '_');
+        }
+        function norm(s) {
+            return String(s || '').trim().toUpperCase().replace(/\s+/g, ' ');
+        }
+        // Chave única da unidade física = TYPE_codProduto sanitizado (igual ao path de conferência)
+        function unitKey(type, cod) {
+            return type + '_' + sanitizeKey(cod);
+        }
+
+        // Lista de TODAS as unidades físicas do produto atual: [{ type, cod, proj, op, key }]
+        function getUnitList() {
+            const out = [];
+            (dbM || []).forEach(u => out.push({ type: 'MODULO', cod: u[1], proj: u[0], op: u[2], key: unitKey('MODULO', u[1]) }));
+            (dbP || []).forEach(u => out.push({ type: 'POD', cod: u[1], proj: u[0], op: u[2], key: unitKey('POD', u[1]) }));
+            return out;
+        }
+
+        // ---- ABRIR TELA: GALERIA DE UNIDADES ----
+        async function openEstrutura() {
+            if (!currentProduct) { alert('Selecione um produto primeiro.'); return; }
+            document.getElementById('est-prod-name').textContent = currentProduct.name || '';
+            estCurrentUnit = null;
+            document.getElementById('est-grid-area').innerHTML = '<div class="est-empty">⏳ Carregando estruturas...</div>';
+            show('scr-estrutura');
+
+            const snap = await db.ref('produtos/' + currentProduct.id + '/estruturas').once('value');
+            estStructures = normalizeStructures(snap.val());
+            renderEstGallery();
+        }
+
+        // Firebase devolve arrays como objeto {0:..,1:..} quando as chaves não são
+        // contíguas. Garante que cada estrutura volte a ser um array de linhas.
+        function normalizeStructures(raw) {
+            const out = {};
+            if (!raw) return out;
+            Object.keys(raw).forEach(k => {
+                const v = raw[k];
+                out[k] = Array.isArray(v) ? v : Object.values(v || {});
+            });
+            return out;
+        }
+
+        // ---- GALERIA (cards estilo rede) ----
+        function renderEstGallery(filter) {
+            document.getElementById('est-gallery-bar').style.display = 'flex';
+            document.getElementById('est-editor-bar').style.display = 'none';
+            const syncEl = document.getElementById('est-sync');
+            if (syncEl) syncEl.style.display = 'none';
+            const q = norm(filter);
+            let units = getUnitList();
+            if (q) units = units.filter(u => norm(u.cod).includes(q) || norm(u.proj).includes(q) || norm(u.op).includes(q));
+
+            if (units.length === 0) {
+                document.getElementById('est-grid-area').innerHTML =
+                    '<div class="est-empty">Nenhuma unidade encontrada. Cadastre a Lista de Sequência do produto primeiro.</div>';
+                return;
+            }
+
+            const cards = units.map(u => {
+                const has = (estStructures[u.key] || []).filter(r => r.cod || r.desc).length > 0;
+                const badge = u.type === 'MODULO'
+                    ? '<span class=" recard-type badge-modulo">Módulo</span>'
+                    : '<span class=" recard-type badge-pod">Pod</span>';
+                return `<div class="recard" onclick="openEstEditor('${u.type}','${u.cod.replace(/'/g, "\\'")}','${(u.proj||'').replace(/'/g, "\\'")}','${(u.op||'').replace(/'/g, "\\'")}')">
+                    ${has ? '<div class="recard-check">✔</div>' : ''}
+                    <img class="recard-img" src="${EST_IMG}" alt="">
+                    <div class="recard-cod">${u.cod}</div>
+                    <div class="recard-sub">Proj: ${u.proj || '—'}</div>
+                    <div class="recard-sub">OP: ${u.op || '—'} ${badge}</div>
+                </div>`;
+            }).join('');
+
+            const total = units.length;
+            const done = units.filter(u => (estStructures[u.key] || []).filter(r => r.cod || r.desc).length > 0).length;
+            document.getElementById('est-grid-area').innerHTML = `
+                <div class="est-gallery-stats">${done} de ${total} unidade(s) com estrutura cadastrada</div>
+                <div class="recard-grid">${cards}</div>`;
+        }
+
+        function onEstGalleryFilter(val) { renderEstGallery(val); }
+
+        // ---- ABRIR EDITOR DE UMA UNIDADE ----
+        function openEstEditor(type, cod, proj, op) {
+            const key = unitKey(type, cod);
+            estCurrentUnit = { type, cod, proj, op, key };
+            if (!estStructures[key]) estStructures[key] = [];
+            document.getElementById('est-gallery-bar').style.display = 'none';
+            document.getElementById('est-editor-bar').style.display = 'flex';
+            document.getElementById('est-editor-title').innerHTML =
+                `<b>${cod}</b> <span class="recard-type ${type === 'MODULO' ? 'badge-modulo' : 'badge-pod'}">${type === 'MODULO' ? 'Módulo' : 'Pod'}</span>`;
+            document.getElementById('est-editor-sub').textContent = `Projeto: ${proj || '—'}  •  OP: ${op || '—'}`;
+            renderEstGrid();
+        }
+
+        async function backToGallery() {
+            await flushEstSave();        // grava qualquer edição pendente ANTES de largar a unidade
+            estCurrentUnit = null;
+            renderEstGallery(document.getElementById('est-gallery-filter').value);
+        }
+
+        // Salva imediatamente o que estiver pendente no debounce (evita perda ao sair rápido)
+        async function flushEstSave() {
+            if (estSaveTimer) { clearTimeout(estSaveTimer); estSaveTimer = null; }
+            if (currentProduct && estCurrentUnit) await estSaveNow();
+        }
+
+        // ---- RENDER DA GRADE ----
+        function renderEstGrid() {
+            const key = estCurrentUnit.key;
+            const rows = estStructures[key] || [];
+            const tasks = getUnitTasks(estCurrentUnit.type, estCurrentUnit.proj);
+
+            const validPairs = new Set();
+            (tasks || []).forEach(t => { if (t.c) validPairs.add(norm(t.p) + '||' + norm(t.a)); });
+
+            let orphanCount = 0;
+            const bodyRows = rows.map((r, i) => {
+                const isOrphan = (r.posto || r.ativ) && !validPairs.has(norm(r.posto) + '||' + norm(r.ativ));
+                if (isOrphan) orphanCount++;
+                return `<tr class="${isOrphan ? 'orphan' : ''}">
+                    <td class="rownum">${i + 1}</td>
+                    <td><input value="${esc(r.posto)}" oninput="estCell(${i},'posto',this.value)" placeholder="LP 07"></td>
+                    <td><input value="${esc(r.ativ)}" oninput="estCell(${i},'ativ',this.value)" placeholder="PINTURA 1ª DEMÃO + CATADOS"></td>
+                    <td><input value="${esc(r.cod)}" oninput="estCell(${i},'cod',this.value)" placeholder="1.05.001433"></td>
+                    <td><input value="${esc(r.desc)}" oninput="estCell(${i},'desc',this.value)" placeholder="TINTA ACRILICA..."></td>
+                    <td><input class="num" value="${esc(r.qtd)}" oninput="estCell(${i},'qtd',this.value)" placeholder="2.34"></td>
+                    <td><input value="${esc(r.un)}" oninput="estCell(${i},'un',this.value)" placeholder="L"></td>
+                    <td class="colx"><button class="btn-del" onclick="estDelRow(${i})">✕</button></td>
+                </tr>`;
+            }).join('');
+
+            const warn = document.getElementById('est-warn');
+            if (orphanCount > 0) {
+                warn.style.display = 'block';
+                warn.innerHTML = `⚠️ ${orphanCount} linha(s) com <b>Posto + Atividade</b> que não existem na EAP (${estCurrentUnit.type}) deste produto. Esse material nunca será consumido nem contará como pendente. Confira a grafia.`;
+            } else {
+                warn.style.display = 'none';
+            }
+
+            document.getElementById('est-grid-area').innerHTML = `
+                <div class="est-actions">
+                    <button style="background:#28a745" onclick="estAddRows(20)">+ 20 linhas</button>
+                    <button style="background:#17a2b8" onclick="estPasteHelp()">📋 Colar do Excel</button>
+                    <button style="background:#dc3545" onclick="estDeleteRows()">Excluir linhas</button>
+                    <span style="margin-left:auto;font-size:12px;color:#888;align-self:center;">
+                        ${rows.length} linha(s) • salvo automaticamente
+                    </span>
+                </div>
+                <div class="est-grid-wrap" id="est-grid-wrap" tabindex="0">
+                    <table class="est-grid">
+                        <thead><tr>
+                            <th class="rownum">#</th>
+                            <th style="width:90px;">Posto</th>
+                            <th>Atividade</th>
+                            <th style="width:120px;">Código</th>
+                            <th>Descrição do Produto</th>
+                            <th class="num" style="width:80px;">Qtd. Unit.</th>
+                            <th style="width:60px;">Un.</th>
+                            <th class="colx"></th>
+                        </tr></thead>
+                        <tbody>${bodyRows || ''}</tbody>
+                    </table>
+                </div>`;
+
+            if (rows.length === 0) estAddRows(20);
+
+            const wrap = document.getElementById('est-grid-wrap');
+            wrap.addEventListener('paste', estHandlePaste);
+        }
+
+        function esc(v) { return String(v == null ? '' : v).replace(/"/g, '&quot;'); }
+
+        function estCell(i, field, val) {
+            const key = estCurrentUnit.key;
+            if (!estStructures[key][i]) estStructures[key][i] = { posto: '', ativ: '', cod: '', desc: '', qtd: '', un: '' };
+            estStructures[key][i][field] = val;
+            scheduleEstSave();
+        }
+
+        function estAddRows(n) {
+            const key = estCurrentUnit.key;
+            if (!estStructures[key]) estStructures[key] = [];
+            for (let k = 0; k < n; k++) estStructures[key].push({ posto: '', ativ: '', cod: '', desc: '', qtd: '', un: '' });
+            renderEstGrid();
+            scheduleEstSave();
+        }
+
+        function estDelRow(i) {
+            const key = estCurrentUnit.key;
+            estStructures[key].splice(i, 1);
+            renderEstGrid();
+            scheduleEstSave();
+        }
+
+        // "Excluir linhas": apaga TODAS menos a primeira (que fica em branco)
+        function estDeleteRows() {
+            const key = estCurrentUnit.key;
+            if (!confirm('Excluir todas as linhas desta estrutura? A primeira linha será mantida em branco.')) return;
+            estStructures[key] = [{ posto: '', ativ: '', cod: '', desc: '', qtd: '', un: '' }];
+            renderEstGrid();
+            scheduleEstSave();
+        }
+
+        function estPasteHelp() {
+            alert('Copie as colunas no Excel (Posto, Atividade, Código, Descrição, Qtd, Unidade), clique numa célula da grade e cole (Ctrl+V). Pode colar centenas de linhas de uma vez — as linhas necessárias são criadas automaticamente.');
+        }
+
+        // Colar do Excel: divide por tab (colunas) e quebra de linha (linhas).
+        // Cria automaticamente quantas linhas forem necessárias (ex: colar 500 linhas).
+        function estHandlePaste(e) {
+            const text = (e.clipboardData || window.clipboardData).getData('text');
+            if (!text || (text.indexOf('\t') === -1 && text.indexOf('\n') === -1)) return; // colagem simples numa célula
+            e.preventDefault();
+
+            const active = document.activeElement;
+            let startRow = 0;
+            if (active && active.tagName === 'INPUT') {
+                const tr = active.closest('tr');
+                const num = tr && tr.querySelector('.rownum');
+                if (num) startRow = parseInt(num.textContent, 10) - 1;
+            }
+
+            const key = estCurrentUnit.key;
+            const fields = ['posto', 'ativ', 'cod', 'desc', 'qtd', 'un'];
+            const lines = text.replace(/\r/g, '').split('\n').filter((l, idx, arr) => !(idx === arr.length - 1 && l === ''));
+
+            // Garante capacidade: cria as linhas que faltarem (colar 500 = cria 500)
+            const needed = startRow + lines.length;
+            while (estStructures[key].length < needed) {
+                estStructures[key].push({ posto: '', ativ: '', cod: '', desc: '', qtd: '', un: '' });
+            }
+
+            lines.forEach((line, li) => {
+                const cols = line.split('\t');
+                const idx = startRow + li;
+                cols.forEach((c, ci) => { if (ci < fields.length) estStructures[key][idx][fields[ci]] = c.trim(); });
+            });
+
+            renderEstGrid();
+            scheduleEstSave();
+        }
+
+        // ---- SALVAR (debounce 800ms) ----
+        function estSync(state) {
+            const el = document.getElementById('est-sync');
+            if (!el) return;
+            el.style.display = 'inline-block';
+            if (state === 'saving') { el.textContent = '⏳ Salvando...'; el.style.background = 'rgba(255,193,7,.25)'; }
+            else if (state === 'saved') { el.textContent = '☁️ Salvo'; el.style.background = 'rgba(34,197,94,.30)'; }
+            else { el.textContent = '⚠️ Erro ao salvar'; el.style.background = 'rgba(229,57,53,.35)'; }
+        }
+        function scheduleEstSave() {
+            setSyncStatus(false);
+            estSync('saving');
+            clearTimeout(estSaveTimer);
+            estSaveTimer = setTimeout(estSaveNow, 800);
+        }
+        async function estSaveNow() {
+            if (!currentProduct || !estCurrentUnit) return;
+            const key = estCurrentUnit.key;
+            const clean = (estStructures[key] || []).filter(r =>
+                (r.posto || r.ativ || r.cod || r.desc || r.qtd || r.un));
+            try {
+                // Garante que o nó do produto tenha identidade ANTES de criar /estruturas.
+                // Sem isso, salvar no EXPRESS criava um nó só com "estruturas" (sem
+                // id/nome/imagem), corrompendo a lista de produtos no próximo carregamento.
+                if (currentProduct.legacy) {
+                    await db.ref('produtos/express').update({
+                        id: 'express', name: currentProduct.name || 'EXPRESS',
+                        img: currentProduct.img || LEGACY_PRODUCT.img, legacy: true
+                    });
+                }
+                await db.ref('produtos/' + currentProduct.id + '/estruturas/' + key).set(clean);
+                setSyncStatus(true);
+                estSync('saved');
+            } catch (err) {
+                console.error('Falha ao salvar estrutura:', err);
+                setSyncStatus(false);
+                estSync('error');
+            }
+        }
+
+        // ============================================================
+        // ===== QUANTITATIVO (pendente por unidade física) ==========
+        // ============================================================
+
+        // Carrega TODAS as estruturas do produto atual (cache simples por abertura do modal)
+        let quantStructuresCache = null;
+        async function loadAllStructures() {
+            const snap = await db.ref('produtos/' + currentProduct.id + '/estruturas').once('value');
+            return normalizeStructures(snap.val());
+        }
+
+        function openQuantModal() {
+            if (!currentProduct) { alert('Selecione um produto.'); return; }
+            document.getElementById('modal-quant').classList.add('open');
+            document.getElementById('quant-input').value = '';
+            document.getElementById('quant-suggestions').style.display = 'none';
+            document.getElementById('quant-suggestions').innerHTML = '';
+            document.getElementById('quant-results-area').innerHTML = '';
+            quantStructuresCache = null;
+            loadAllStructures().then(s => { quantStructuresCache = s; });
+            setTimeout(() => document.getElementById('quant-input').focus(), 100);
+        }
+        function closeQuantModal(e, force) {
+            if (force || (e && e.target === document.getElementById('modal-quant'))) {
+                document.getElementById('modal-quant').classList.remove('open');
+            }
+        }
+
+        // ---- AJUDA / COMO FUNCIONA O SISTEMA ----
+        function openHelpModal() {
+            const m = document.getElementById('modal-help');
+            m.classList.add('open');
+            const body = m.querySelector('.help-body');
+            if (body) body.scrollTop = 0;
+        }
+        function closeHelpModal(e, force) {
+            if (force || (e && e.target === document.getElementById('modal-help'))) {
+                document.getElementById('modal-help').classList.remove('open');
+            }
+        }
+        // Rola até a seção DENTRO do corpo do modal (sem mexer na página de trás)
+        function helpGo(id) {
+            const el = document.getElementById(id);
+            const body = document.querySelector('#modal-help .help-body');
+            if (!el || !body) return;
+            const delta = el.getBoundingClientRect().top - body.getBoundingClientRect().top;
+            body.scrollTo({ top: body.scrollTop + delta - 8, behavior: 'smooth' });
+        }
+
+        // Lista de materiais distintos (cod -> desc) presentes em qualquer estrutura
+        function getAllMaterials() {
+            const map = {};
+            const src = quantStructuresCache || {};
+            Object.values(src).forEach(rows => (rows || []).forEach(r => {
+                if (r.cod || r.desc) {
+                    const k = norm(r.cod) + '|' + norm(r.desc);
+                    if (!map[k]) map[k] = { cod: r.cod || '', desc: r.desc || '', un: r.un || '' };
+                }
+            }));
+            return Object.values(map);
+        }
+
+        function onQuantInput(val) {
+            const q = norm(val);
+            const sug = document.getElementById('quant-suggestions');
+            const area = document.getElementById('quant-results-area');
+            if (q.length < 2) { sug.style.display = 'none'; sug.innerHTML = ''; area.innerHTML = ''; return; }
+            if (!quantStructuresCache) { area.innerHTML = '<div class="search-loading">⏳ Carregando estruturas...</div>'; return; }
+
+            const mats = getAllMaterials().filter(m => norm(m.cod).includes(q) || norm(m.desc).includes(q));
+            if (mats.length === 0) {
+                sug.style.display = 'none'; sug.innerHTML = '';
+                area.innerHTML = '<div class="search-empty">Nenhum material com esse código/descrição nas estruturas cadastradas.</div>';
+                return;
+            }
+            sug.style.display = 'block';
+            sug.innerHTML = mats.slice(0, 12).map(m => `
+                <div class="suggestion-item" onclick="quantSelect('${(m.cod || '').replace(/'/g, "\\'")}','${(m.desc || '').replace(/'/g, "\\'")}')">
+                    <b>${m.cod || '—'}</b> ${m.desc || ''} <small style="color:#999">(${m.un || '?'})</small>
+                </div>`).join('');
+        }
+
+        async function quantSelect(cod, desc) {
+            document.getElementById('quant-suggestions').style.display = 'none';
+            document.getElementById('quant-input').value = (cod ? cod + ' - ' : '') + desc;
+            const area = document.getElementById('quant-results-area');
+            area.innerHTML = '<div class="search-loading">⏳ Calculando pendências...</div>';
+
+            const structures = quantStructuresCache || await loadAllStructures();
+            estStructures = structures;
+            const snapshot = await db.ref('conferencias').once('value');
+            const allSaved = snapshot.val() || {};
+            const prefix = getProdPrefix();
+            const matKeyTarget = norm(cod) + '|' + norm(desc);
+
+            const results = [];      // por unidade
+            let totalPend = 0, unitLabel = '';
+
+            const scan = (units, type) => {
+                (units || []).forEach(u => {
+                    const cod = u[1];
+                    const tasks = getUnitTasks(type, u[0]);  // EAP da unidade (ou padrão)
+                    const key = unitKey(type, cod);          // estrutura é por unidade física
+                    const struct = estStructures[key] || structures[key] || [];
+                    if (!struct.length) return;
+
+                    const path = prefix + type + '_' + cod.replace(/\./g, '_');
+                    const saved = allSaved[path] || {};
+
+                    const matRows = struct.filter(r => (norm(r.cod) + '|' + norm(r.desc)) === matKeyTarget);
+                    if (!matRows.length) return;
+
+                    let pend = 0;
+                    matRows.forEach(r => {
+                        unitLabel = r.un || unitLabel;
+                        const idxs = [];
+                        (tasks || []).forEach((t, i) => {
+                            if (t.c && norm(t.p) === norm(r.posto) && norm(t.a) === norm(r.ativ)) idxs.push(i);
+                        });
+                        const done = idxs.length > 0 && idxs.every(i => saved['c_' + i] === true);
+                        if (!done) pend += parseFloat(String(r.qtd).replace(',', '.')) || 0;
+                    });
+
+                    if (pend > 0) {
+                        results.push({ express: cod, op: u[2], proj: u[0], type, pend });
+                        totalPend += pend;
+                    }
+                });
+            };
+
+            scan(dbM, 'MODULO');
+            scan(dbP, 'POD');
+
+            if (results.length === 0) {
+                area.innerHTML = `<div class="search-empty">✅ Nenhuma pendência: este material está totalmente consumido (ou não consta nas estruturas das unidades).</div>`;
+                return;
+            }
+
+            results.sort((a, b) => b.pend - a.pend);
+            const fmt = n => (Math.round(n * 1000) / 1000).toLocaleString('pt-BR');
+
+            area.innerHTML = `
+                <div class="search-results-title">Pendência de: "${cod || desc}"</div>
+                <div class="quant-stat-grid">
+                    <div class="quant-stat"><b>${fmt(totalPend)} ${unitLabel}</b><span>TOTAL PENDENTE</span></div>
+                    <div class="quant-stat"><b>${results.length}</b><span>UNIDADES COM PENDÊNCIA</span></div>
+                </div>
+                <div class="search-results-list">
+                    ${results.map(r => `
+                        <div class="quant-result-item">
+                            <span class="result-type-badge ${r.type === 'MODULO' ? 'badge-modulo' : 'badge-pod'}">
+                                ${r.type === 'MODULO' ? '🏗️' : '🚿'}
+                            </span>
+                            <div class="qinfo">
+                                <div class="qexp">${r.express}</div>
+                                <div class="qsub">Proj: ${r.proj} • OP: ${r.op}</div>
+                            </div>
+                            <div class="quant-qty">${fmt(r.pend)} ${unitLabel}</div>
+                        </div>`).join('')}
+                </div>`;
+        }
+
+        async function doExcelAll() {
+            const type = currentListType;
+            const data = (type === 'MODULO') ? dbM : dbP;
+            const tasks = (type === 'MODULO') ? tM : tP;
+            
+            const snapshot = await db.ref('conferencias').once('value');
+            const allSaved = snapshot.val() || {};
+            
+            let fullMatrix = [];
+
+            data.forEach(u => {
+                let rowData = [u[0], u[1], u[2]];
+                const path = getProdPrefix() + type + "_" + u[1].replace(/\./g, '_');
+                const saved = allSaved[path] || {};
+
+                tasks.forEach((t, i) => {
+                    if (t.d) {
+                        let val = saved['d_'+i];
+                        if(val) {
+                            const [y, m, d] = val.split('-');
+                            rowData.push(`${d}/${m}/${y}`);
+                        } else { rowData.push(""); }
+                    }
+                    if (t.c) {
+                        rowData.push(saved['c_'+i] ? "=VERDADEIRO" : "=FALSO");
+                    }
+                });
+                fullMatrix.push(rowData);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(fullMatrix);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "SGC_Geral");
+            XLSX.writeFile(wb, `SGC_Geral_${type}.xlsx`);
+        }
+    </script>
+</body>
+</html>
